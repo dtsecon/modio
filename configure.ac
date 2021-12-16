@@ -48,14 +48,13 @@ AC_LANG_POP([C++])
 
 # check for libraries
 AC_MSG_CHECKING([Checking whether the math library is present])
-AC_CHECK_LIB([m], [log10], [], [echo; echo "ERROR: linker failed to link with libm (-lm)"])
+AC_CHECK_LIB([m], [log10], [], [echo; echo "ERROR: linker failed to link with libm (-lm), exiting..."])
 AC_MSG_CHECKING([Checking whether the modbus library is present])
-AC_CHECK_LIB([modbus], [modbus_connect], [], [echo; echo "ERROR: linker failed to link with libmodbus (-lmodbus)"])
+AC_CHECK_LIB([modbus], [modbus_connect], [], [echo; echo "ERROR: linker failed to link with libmodbus (-lmodbus), exiting..."])
 AC_MSG_CHECKING([Checking whether the config library is present])
-AC_CHECK_LIB([config], [config_read_file], [], [echo; echo "ERROR: linker failed to link with libconfig (-lconfig)"])
+AC_CHECK_LIB([config], [config_read_file], [], [echo; echo "ERROR: linker failed to link with libconfig (-lconfig), exiting..."])
 AC_MSG_CHECKING([Checking whether the hashmap library is present])
-AC_CHECK_LIB([hashmap], [hashmap_hash_string], [], [echo; echo "ERROR: linker failed to link with libhashmap (-lhashmap)"])
-
+AC_CHECK_LIB([hashmap], [hashmap_hash_string], [], [echo; echo "ERROR: linker failed to link with libhashmap (-lhashmap), exiting..."])
 
 # create Makefile
 AC_CONFIG_FILES([Makefile])
