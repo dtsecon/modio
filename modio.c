@@ -137,7 +137,7 @@ int main(int argc, char **argv)
     while ((opt = getopt(argc, argv, "p:u:y:o:d:i:za:rw:l:gt:bxsf:nv:ce:j:h")) != -1) {
         switch (opt) {
             case 'p':
-                port = malloc(sizeof(optarg));
+                port = (char *)malloc((strlen(optarg) + 1) * sizeof(char));
                 strcpy(port, optarg);
                 break;
             case 'u':
@@ -289,7 +289,7 @@ int main(int argc, char **argv)
 
     /* use DEVICE_PATH if port hasn't been defined */
     if (port == NULL) {
-        port = (char *)malloc(sizeof(DEVICE_PATH));
+        port = (char *)malloc((strlen(DEVICE_PATH) + 1) * sizeof(char));
         strcpy(port, DEVICE_PATH);
     }
 
@@ -331,8 +331,16 @@ int main(int argc, char **argv)
         }
     }
 
-   /* allocate memory for register array */
+    /* allocate memory for register array */
     rgnum = (int *)malloc(sizeof(int) * (addr_c + 1));
+
+    /* allocate memory for address array if it's still NULL (-a wasn't present) */
+    if (addr_l == NULL) {
+        addr_l = (int *)malloc(sizeof(int) * (addr_c + 1));
+
+        /* addr_c = 1 */
+        *addr_l = 0x0;
+    }
 
     /* if -g, register based access is enabled calculate register access address */
     if (rgac) {
@@ -1072,7 +1080,7 @@ modbus_t *modbus_new(char *port, serconf_t sc)
 
         /* open ip:port */
         } else if ((sp = strchr(port, ':')) != NULL) {
-            char *tcp_port = malloc(sizeof(sp));
+            char *tcp_port = malloc((strlen(sp) + 1) * sizeof(char));
             strcpy(tcp_port, sp + 1);
             *sp = '\0';
             mb = modbus_new_tcp(port, (int )strtoul(tcp_port, NULL, 10));
@@ -1147,7 +1155,7 @@ int init_drlist(dvlist_t **lst)
     int cnt;
 
     /* Scanning the devices' directory */
-    if (NULL == (FD = opendir ("./regs"))) {
+    if (NULL == (FD = opendir (REGISTER_PATH))) {
         fprintf(stderr, "Error: Failed to open devices' directory\n");
         exit(EXIT_FAILURE);
     }
@@ -1191,7 +1199,7 @@ void read_dreg(dvlist_t *lst)
     dvlist_t *dvl = lst;
 
     /* Scanning the devices' directory */
-    if (NULL == (FD = opendir ("./regs"))) {
+    if (NULL == (FD = opendir (REGISTER_PATH))) {
         fprintf(stderr, "Error: Failed to open devices' directory\n");
         exit(EXIT_FAILURE);
     }
@@ -1204,12 +1212,12 @@ void read_dreg(dvlist_t *lst)
             continue;
         }
 
-        path = (char *)malloc((strlen("./regs/") + strlen(in_file->d_name) + 1) * sizeof(char));
+        path = (char *)malloc((strlen(REGISTER_PATH) + strlen(in_file->d_name) + 1) * sizeof(char));
         if (!path) {
             fprintf(stderr, "malloc failed: insufficient memory!\n");
             exit(EXIT_FAILURE);
         }
-        strcpy(path, "./regs/");
+        strcpy(path, REGISTER_PATH);
         strcat(path, in_file->d_name);
 
         config_init(&cfg);

@@ -5,6 +5,10 @@
 #ifndef MXIO_H
 #define MXIO_H
 
+#ifndef REGISTER_PATH
+#define REGISTER_PATH "/usr/local/share/modio/"
+#endif
+
 #define DEVICE_PATH "/dev/ttyUSB0"
 #define BAUD_RATE 9600
 #define DATA_BIT 8
