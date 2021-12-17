@@ -9,7 +9,7 @@ AC_MSG_NOTICE([Checking depedencies for modio build])
 AC_INIT([modio],[0.8])
 
 # safety check in case user overwritten src dir
-AC_CONFIG_SRCDIR([modio.c])
+AC_CONFIG_SRCDIR([src/modio.c])
 
 # store the auxiliary tools in build-aux dir
 AC_CONFIG_AUX_DIR([build-aux])
@@ -19,6 +19,8 @@ AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
 # check for C preprocessor
 AC_PROG_CPP
+
+AC_SUBST([CFLAGS], ["-g -O"])
 
 # check C compiler
 AC_PROG_CC
@@ -56,8 +58,12 @@ AC_CHECK_LIB([config], [config_read_file], [], [echo; echo "ERROR: linker failed
 AC_MSG_CHECKING([Checking whether the hashmap library is present])
 AC_CHECK_LIB([hashmap], [hashmap_hash_string], [], [echo; echo "ERROR: linker failed to link with libhashmap (-lhashmap), exiting..."])
 
+#AC_PREFIX_DEFAULT (prefix)
+AC_SUBST([modiodir], [$datadir/modio])
+#AC_SUBST([CFLAGS], [""])
+
 # create Makefile
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile regs/Makefile])
 
 # gerate output
 AC_OUTPUT
