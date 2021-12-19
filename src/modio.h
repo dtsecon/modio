@@ -70,7 +70,7 @@ enum prfmt {
    ASC = 3,                     /* ASCII format */
    BFD = 4,                     /* decimal byte dot separated */
    BFX = 5,                     /* hex byte dot separated */
-   HLO = 6                      /* hex byte dot separated */
+   HLO = 6                      /* high / low register word */
 };
 typedef enum prfmt prfmt_t;
 

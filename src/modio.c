@@ -18,6 +18,7 @@
 #include <modbus.h>
 #include <libconfig.h>
 #include <hashmap.h>
+#include <getopt.h>
 #include "modio.h"
 
 /* register store arrays */
@@ -74,7 +75,8 @@ void usage(char *pname);
 /*
  * main
  */
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
     int rval = 0;               /* return value */
     int lsz = 0;                /* device list size */
@@ -100,7 +102,7 @@ int main(int argc, char **argv)
     int rgac = FALSE;           /* register access */
     int id = MODBUS_SLAVE_ID;   /* modbus slave id */
     int zba = FALSE;            /* zero based addressing flag */
-    int jot = FALSE;            /* jotting device's info flag */
+    int rall = FALSE;           /* read all device's info flag */
     int dnum = 0;               /* device number for printing registers' info */
     int bfm = 0;                /* print value formatted as '.' separated bytes */
     prfmt_t pfm = DEC;          /* print values as dec */
@@ -112,6 +114,47 @@ int main(int argc, char **argv)
             DATA_BIT
     };                          /* serial configuration */
     uint16_t val = 0;           /* value to write */
+
+    enum opt_flag {
+        BRF = 0,
+        VER = 1,
+        BAU = 2,
+        PAR = 3,
+        SBT = 4,
+        DBT = 5
+    };                          /* option flag values for getopt_long */
+    static int verbose_flag;    /* flag set by ‘--verbose’. */
+    static int baud_o;          /* flag set by '--baud' */
+    static int parity_o;        /* flag set by '--parity' */
+    static int sbit_o;          /* flag set by '--sbit' */
+    static int dbit_o;          /* flag set by '--dbit' */
+    static struct option long_options[] = {
+
+            {"verbose",     no_argument,       &verbose_flag, VER},
+            {"brief",       no_argument,       &verbose_flag, BRF},
+            {"port",        required_argument, 0,             'p'},
+            {"baud",        required_argument, &baud_o,       BAU},
+            {"parity",      required_argument, &parity_o,     PAR},
+            {"sbit",        required_argument, &sbit_o,       SBT},
+            {"dbit",        required_argument, &dbit_o,       DBT},
+            {"dev_id",      required_argument, 0,             'i'},
+            {"zero",              no_argument, 0,             'z'},
+            {"addr",        required_argument, 0,             'a'},
+            {"read",              no_argument, 0,             'r'},
+            {"write",       required_argument, 0,             'w'},
+            {"len",         required_argument, 0,             'l'},
+            {"reg_type",    required_argument, 0,             't'},
+            {"reg_access",        no_argument, 0,             'g'},
+            {"format",      required_argument, 0,             'f'},
+            {"dev_info",    optional_argument, 0,             'd'},
+            {"read_all",    required_argument, 0,             'e'},
+            {"reg_info",    required_argument, 0,             'o'},
+            {"help",              no_argument, 0,             'h'},
+            {0,                      0, 0,               0}
+    };
+
+    /* getopt_long stores the option index here. */
+    int option_index = 0;
 
     /* initialize the device list */
     lsz = init_drlist(&dvl);
@@ -130,23 +173,35 @@ int main(int argc, char **argv)
 
     /* check options */
     int opt;
-    while ((opt = getopt(argc, argv, "p:u:y:o:d:i:za:rw:l:gt:bxsf:nv:ce:j:h")) != -1) {
+    while ((opt = getopt_long(argc,
+                              argv,
+                              "p:i:za:rw:l:t:gf:d::e:o:h",
+                              long_options,
+                              &option_index)) != -1
+                              )
+    {
         switch (opt) {
+            case 0:
+
+                /* parse long options without shortcuts */
+                if (baud_o == 1) {
+                    sc.baud = (int )strtoul(optarg, NULL, 10);
+                } else if (parity_o == 1) {
+                    sc.prty = *(char *) optarg;
+                } else if (sbit_o == 1) {
+                    sc.sbit = (int) strtoul(optarg, NULL, 10);
+                } else if (dbit_o == 1) {
+                    sc.dbit = (int) strtoul(optarg, NULL, 10);
+                }
+                printf ("my option %s", long_options[option_index].name);
+                if (optarg) {
+                    printf(" with arg %s", optarg);
+                }
+                printf ("\n");
+                break;
             case 'p':
                 port = (char *)malloc((strlen(optarg) + 1) * sizeof(char));
                 strcpy(port, optarg);
-                break;
-            case 'u':
-                sc.baud = (int )strtoul(optarg, NULL, 10);
-                break;
-            case 'y':
-                sc.prty = *(char *)optarg;
-                break;
-            case 'o':
-                sc.sbit = (int )strtoul(optarg, NULL, 10);
-                break;
-            case 'd':
-                sc.dbit = (int )strtoul(optarg, NULL, 10);
                 break;
             case 'i':
                 id = (int )strtoul(optarg, NULL, 0);
@@ -196,48 +251,62 @@ int main(int argc, char **argv)
                 rgac = TRUE;
                 break;
 
-            /* print registers in binary format */
-            case 'b':
-                pfm = BIN;
-                break;
-
-            /* print registers in hex format */
-            case 'x':
-                pfm = HEX;
-                break;
-
-            /* print registers as ascii encoded */
-            case 's':
-                pfm = ASC;
-                break;
-
-            /* print registers as dot separated bytes 1:dec, 2:hex */
+            /*
+             * print registers as:
+             *  - bin (0)
+             *  - hex (1)
+             *  - dec (3)
+             *  - ascii
+             *  - dot separated bytes in decimal format
+             *  - dot separated bytes in hex format
+             *  - high/low register integer
+             */
             case 'f':
-                bfm = (int )strtoul(optarg, NULL, 0);
-                if (bfm < 1 || bfm  > 2) {
+                pfm = (int )strtoul(optarg, NULL, 0);
+                if (pfm < 0 || pfm  > 6) {
                     usage(argv[0]);
                     exit(EXIT_FAILURE);
                 }
-                if (bfm == 1) {
-                    pfm = BFD;
-                } else {
-                    pfm = BFX;
-                }
                 break;
+            case 'd':
 
-            /* print registers as hi low words (length must be even) */
-            case 'n':
-                pfm = HLO;
-                break;
+                /* print registers of a supported device */
+                if (optarg) {
+                    dnum = (int) strtoul(optarg, NULL, 0);
+                } else if ( !optarg &&                  /* handle optional opt arg in long option */
+                     optind < argc &&            /* make sure optind is valid */
+                     NULL != argv[optind] &&     /* make sure it's not a null string */
+                     '\0' != argv[optind][0] &&  /* ... or an empty string */
+                     '-' != argv[optind][0]      /* ... or another option */
+                    ) {
+
+                    /* update optind so the next getopt_long invocation skips argv[optind] */
+                    char *temp_optarg = argv[optind++];
+                    dnum = (int) strtoul(temp_optarg, NULL, 0);
+                }
+                if (dnum) {
+
+                    /* if device number greater than device list size exit */
+                    if (dnum > lsz || dnum == 0) {
+                        print_dev_info(dvl, lsz);
+                        exit(EXIT_FAILURE);
+                    }
+                    print_dev_reginfo(dvl, dnum - 1, dvl[dnum-1].nor);
+
+                    /* print list of supported devices */
+                } else {
+                    print_dev_info(dvl, lsz);
+                }
+                exit(EXIT_SUCCESS);
 
             /* print register info from support register file */
-            case 'v':
+            case 'o':
                 dnum = (int )strtoul(optarg, NULL, 0);
                 break;
 
             /* read all registers defined in support register file */
-            case 'j':
-                jot = TRUE;
+            case 'e':
+                rall = TRUE;
                 dnum = (int )strtoul(optarg, NULL, 0);
 
                 /* if device number greater than device list size exit */
@@ -246,23 +315,6 @@ int main(int argc, char **argv)
                     exit(EXIT_FAILURE);
                 }
                 break;
-
-            /* print list of supported devices */
-            case 'c':
-                print_dev_info(dvl, lsz);
-                exit(EXIT_SUCCESS);
-
-            /* print registers of a supported device */
-            case 'e':
-                dnum = (int )strtoul(optarg, NULL, 0);
-
-                /* if device number greater than device list size exit */
-                if (dnum > lsz || dnum == 0) {
-                    usage(argv[0]);
-                    exit(EXIT_FAILURE);
-                }
-                print_dev_reginfo(dvl, dnum - 1, dvl[dnum-1].nor);
-                exit(EXIT_SUCCESS);
             case 'h':
                 usage(argv[0]);
                 exit(EXIT_SUCCESS);
@@ -291,8 +343,8 @@ int main(int argc, char **argv)
         exit(EXIT_SUCCESS);
     }
 
-    /* if -j <dev_num> read device registers defined in configuration file */
-    if (jot && dnum) {
+    /* if -e <dev_num> read device registers defined in configuration file */
+    if (rall && dnum) {
 
         /* initialize modbus connection */
         mb = modbus_init(port, sc, id);
@@ -303,7 +355,7 @@ int main(int argc, char **argv)
         exit(EXIT_SUCCESS);
     }
 
-    /* if -v <num>, create a hashmap between register number and dreg struct for device <num> in device list */
+    /* if -d <num>, create a hashmap between register number and dreg struct for device <num> in device list */
     if (dnum) {
 
         /* Initialize with default string key hash function and comparator */
@@ -337,7 +389,7 @@ int main(int argc, char **argv)
     /* if -g, register based access is enabled calculate register access address */
     if (rgac) {
 
-        /* loop over the register list */
+        /* loop over the register list... */
         for (int i = 0; i <= addr_c; i++) {
 
             /* calculate the digits of the register number and allocate the proper memory size */
@@ -368,7 +420,7 @@ int main(int argc, char **argv)
             }
         }
 
-    /* otherwise calculate register number from address and store is to rgnum array */
+    /* ...otherwise calculate register number from address and store is to rgnum array */
     } else {
         for (int i = 0; i <= addr_c; i++) {
 
@@ -758,7 +810,8 @@ int main(int argc, char **argv)
 /*
  * Read device registers
  */
-void read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
+void
+read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
 {
     uint16_t *reg16p;   /* pointer to 16bit register */
     uint8_t *reg8p;     /* pointer to 8bit register */
@@ -941,7 +994,8 @@ void read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
  *
  * string: byte00.byte01.byte10.byte11
  */
-char *mem_to_bytes(uint16_t *array, int size, char *(*conv)(int)) {
+char *
+mem_to_bytes(uint16_t *array, int size, char *(*conv)(int)) {
     int slen = 0;
     unsigned char *p = (unsigned char *)array;
 
@@ -963,8 +1017,11 @@ char *mem_to_bytes(uint16_t *array, int size, char *(*conv)(int)) {
 }
 
 
-/* return a string with binary representation of inum */
-char *int_to_bin(uint inum)
+/*
+ * return a string with binary representation of inum
+ */
+char *
+int_to_bin(uint inum)
 {
     size_t bits = sizeof(int) * CHAR_BIT;
 
@@ -983,7 +1040,8 @@ char *int_to_bin(uint inum)
 /* 
  * initialize read register array
  */
-void init_rrega() {
+void
+init_rrega() {
 
     for(int i = 0; i < REG_SIZE; i++) {
         creg[i] = 0;
@@ -996,7 +1054,8 @@ void init_rrega() {
 /* 
  * convert an array of uint16_t words with ASCCI characters to a string 
  */
-char *words_to_str(const uint16_t *array, int length)
+char *
+words_to_str(const uint16_t *array, int length)
 {
     char *s = malloc(length * sizeof(uint16_t));
     char *r = s;
@@ -1016,7 +1075,8 @@ char *words_to_str(const uint16_t *array, int length)
  * or 64bit (length = 4) which are stored in array. Returns
  * a 64bit integer.
  */
-uint64_t concat_inv16(const uint16_t *array, int length)
+uint64_t
+concat_inv16(const uint16_t *array, int length)
 {
     uint64_t inum = 0;
     uint16_t *p;
@@ -1032,7 +1092,8 @@ uint64_t concat_inv16(const uint16_t *array, int length)
 /*
  * convert a decimal integer to string
  */
-char *int_to_str(int inum)
+char *
+int_to_str(int inum)
 {
     int sz = snprintf(NULL, 0, "%d", inum);
     char *key = (char *) malloc((sz + 1) * sizeof(char));
@@ -1044,7 +1105,8 @@ char *int_to_str(int inum)
 /*
  * convert a hex integer to string
  */
-char *hex_to_str(int xnum)
+char *
+hex_to_str(int xnum)
 {
     int sz = snprintf(NULL, 0, "%d", xnum);
     char *key = (char *) malloc((sz + 1) * sizeof(char));
@@ -1057,7 +1119,8 @@ char *hex_to_str(int xnum)
 /* 
  * create a new modbus context 
  */
-modbus_t *modbus_new(char *port, serconf_t sc)
+modbus_t *
+modbus_new(char *port, serconf_t sc)
 {
     modbus_t *mb = NULL;
 
@@ -1090,9 +1153,10 @@ modbus_t *modbus_new(char *port, serconf_t sc)
 }
 
 /* 
- * initialize modbus connection 
+ * initialize the modbus connection
  */
-modbus_t *modbus_init(char *port, serconf_t sc, int id)
+modbus_t *
+modbus_init(char *port, serconf_t sc, int id)
 {
     modbus_t *mb;       /* modbus context */
     int rval = -1;
@@ -1141,7 +1205,8 @@ modbus_t *modbus_init(char *port, serconf_t sc, int id)
 /* 
  * Initialize device register list 
  */
-int init_drlist(dvlist_t **lst)
+int
+init_drlist(dvlist_t **lst)
 {
     DIR* FD;
     struct dirent* in_file;
@@ -1178,7 +1243,8 @@ int init_drlist(dvlist_t **lst)
 /* 
  * read device and register info 
  */
-void read_dreg(dvlist_t *lst)
+void
+read_dreg(dvlist_t *lst)
 {
     /* configuration vars */
     config_t cfg;
@@ -1339,7 +1405,8 @@ void read_dreg(dvlist_t *lst)
 /* 
  * print supported devices' information
  */
-void print_dev_info(dvlist_t *lst, int sz)
+void
+print_dev_info(dvlist_t *lst, int sz)
 {
     dvlist_t *dvl = lst;
 
@@ -1356,7 +1423,8 @@ void print_dev_info(dvlist_t *lst, int sz)
 /*
  * print supported device registers' information
  */
-void print_dev_reginfo(dvlist_t *lst, int num, int nor)
+void
+print_dev_reginfo(dvlist_t *lst, int num, int nor)
 {
     dvlist_t *dvl = lst;
     dreg_t *regs = dvl[num].regs;
@@ -1374,39 +1442,40 @@ void print_dev_reginfo(dvlist_t *lst, int num, int nor)
 }
 
 /* print the program command line usage */
-void usage(char *pname)
+void
+usage(char *pname)
 {
     printf("Usage: %s [OPTIONS]...\n", pname);
-    printf("    -p <port>      device port can be either a file or an IP address (default: /dev/ttyUSB0)\n");
+    printf("--(p)ort     <val> device port can be either a file or an IP address (default: /dev/ttyUSB0)\n");
     printf("                   example: /dev/tty<PORT>, 192.0.12.3, 192.168.1.2:1502 (default TCP port 502)\n");
-    printf("    -u <baud_rate> serial port baud rate (default 9600)\n");
-    printf("    -y <parity>    serial port parity (N:none O:odd E:even M:mark default N)\n");
-    printf("    -o <stop_bit>  serial port stop bit (default 1)\n");
-    printf("    -d <data_bits> serial port data bits (default 8)\n");
-    printf("    -i <slave_id>  modbus slave device id (default 1)\n");
-    printf("    -z             modbus zero based addressing (address|register - 1)\n");
-    printf("    -a <address> | memory map address (default address 0x0)\n");
-    printf("       <reg_num> | register number (default 1) if -g has been specified\n");
-    printf("       <v,v,v,v>   comma separated values of addresses or registers e.g. -a0x40032,0x40101,0x4078\n");
+    printf("--baud       <val> serial port baud rate (default 9600)\n");
+    printf("--parity     <val> serial port parity (N:none O:odd E:even M:mark default N)\n");
+    printf("--sbit       <val> serial port stop bit (default 1)\n");
+    printf("--dbit       <val> serial port data bits (default 8)\n");
+    printf("--dev_(i)d   <val> modbus slave device id (default 1)\n");
+    printf("--(z)ero           modbus zero based addressing (address|register - 1)\n");
+    printf("--(a)ddr    <val>| memory map address (default address 0x0)\n");
+    printf("        <reg_num>| register number (default 1) if -g has been specified\n");
+    printf("        <v,v,v,v>  comma separated values of addresses or registers e.g. -a0x40032,0x40101,0x4078\n");
     printf("                   example: modio -p/dev/ttyS0 -a0x40032,0x40101,0x4078 -r -t3\n");
-    printf("    -r             read data from memory\n");
-    printf("    -w <data>      write data to address or register\n");
-    printf("    -l <size>      length of read count from address or register (default 1)\n");
+    printf("--(r)ead           read data from memory\n");
+    printf("--(w)rite    <val> write data to address or register\n");
+    printf("--(l)en      <val> length of read count from address or register (default 1)\n");
     printf("                   length is defined in words or registers and word size depends on register type\n");
     printf("                   example: modio -p/dev/ttyS0 -a0x40078 -l3 -r -t3 reads 3 16bit registers\n");
     printf("                   starting from address 0x40078\n");
-    printf("    -g             read (write) data from (to) register \n");
-    printf("    -t <reg_type>  register type (0:COIL 1:INPUT_BIT 2:INPUT_REG 3:HOLDING, default 0)\n");
-    printf("    -b             print binary values (applicable to INPUT_REG and HOLDING registers)\n");
-    printf("    -x             print hex values (applicable INPUT_REG and HOLDING registers)\n");
-    printf("    -s             print values as strings (applicable to INPUT_REG and HOLDING registers)\n");
-    printf("    -f <format>    print values as strings with '.' separated bytes (1:decimal 2:hex)\n");
-    printf("                   applicable to INPUT_REG and HOLDING registers\n");
-    printf("    -n             print values as high low words in decimal format\n");
-    printf("                   applicable to INPUT_REG and HOLDING registers \n");
-    printf("    -v <dev_id>    print verbose register info for selected device \n");
-    printf("    -c             print supported devices\n");
-    printf("    -e <dev_id>    print supported device registers' info\n");
-    printf("    -j <dev_id>    jot device registers' info on screen\n");
-    printf("    -h             help, print usage\n");
+    printf("--re(g)_access     read (write) data from (to) register \n");
+    printf("--reg_(t)ype <val> register type (0:COIL 1:INPUT_BIT 2:INPUT_REG 3:HOLDING, default 0)\n");
+    printf("--(f)ormat   <val> format print output (default value 2)\n");
+    printf("                   0:bin\n");
+    printf("                   1:hex\n");
+    printf("                   2:dec\n");
+    printf("                   3:ascii\n");
+    printf("                   4: dot ('.') separated bytes as dec\n");
+    printf("                   5: dot ('.') separated bytes as hex\n");
+    printf("                   6: high/low register words as dec\n");
+    printf("--(d)ev_info  [id] id is optional, if defined print registers' info for selected device otherwise\n");
+    printf("                   print list of supported devices\n");
+    printf("--r(e)ad_all  <id> read all registers' from device with <id> in the list of supported devices\n");
+    printf("--(h)elp           print usage\n");
 }
