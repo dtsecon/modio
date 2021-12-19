@@ -47,7 +47,7 @@ INSTALLATION
 
     or download compile and install from sources:  
 
-    * `git clone https://github.com/hyperrealm/libconfig`   
+    * `git clone https://github.com/hyperrealm/libconfig` - download the source
     * `cd libconfig`   
     * `autoreconf`   
     * `./configure`   
@@ -60,10 +60,10 @@ INSTALLATION
  2. **libmodbus**. The latest stable release is available in many Linux distributions.  
     You can also download, compile and install from the source code :  
 
-    * `git clone https://github.com/stephane/libmodbus`  
+    * `git clone https://github.com/stephane/libmodbus` - download the source
     * `cd libmodbus`
     * `./autogen.sh`
-    * `./configure --prefix=/usr/local/`
+    * `./configure --prefix=/usr/local/` - defalut installation prefix=/usr
     * `make`
     * `sudo make install`
 
@@ -76,7 +76,7 @@ INSTALLATION
     * `sudo make install` - _OPTIONAL_ install the library on this system
 
  4. **modio**. Build and install modio:
-    * `git clone https://github.com/dtsecon/modio
+    * `git clone https://github.com/dtsecon/modio`- download the source
     * `cd modio`
     * `./autoreconf `
     * `./configure` - default installation prefix=/usr/local
