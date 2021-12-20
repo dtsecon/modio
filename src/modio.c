@@ -381,9 +381,7 @@ main(int argc, char **argv)
     /* allocate memory for address array if it's still NULL (-a wasn't present) */
     if (addr_l == NULL) {
         addr_l = (int *)malloc(sizeof(int) * (addr_c + 1));
-
-        /* addr_c = 1 */
-        *addr_l = 0x0;
+        *addr_l = 0x0;  /* addr_c = 1 */
     }
 
     /* if -g, register based access is enabled calculate register access address */
@@ -400,6 +398,11 @@ main(int argc, char **argv)
                 hexreg = (char *)malloc(sizeof(char));
             }
             sprintf(hexreg, "%x", addr_l[i]);
+            size_t nod = strlen(hexreg);
+            if (nod > 5) {
+                printf("ERROR: invalid register number\n");
+                exit(EXIT_FAILURE);
+            }
             rgnum[i] = (int )(0x0 + strtoul(hexreg, NULL, 16));
             switch (rtype) {
                 case COIL:
@@ -426,23 +429,39 @@ main(int argc, char **argv)
 
             /* if address type access calculate rtype */
             char *xaddr = hex_to_str(addr_l[i]);
-            rtype = (xaddr[0] - '0') - 1;
-            switch (rtype) {
-                case COIL:
-                    rgnum[i] = addr_l[i] - 0x0;
-                    break;
-                case INPUT_B:
-                    rgnum[i] = addr_l[i] - 0x10000;
-                    break;
-                case INPUT_R:
-                    rgnum[i] = addr_l[i] - 0x30000;
-                    break;
-                case HOLDING:
-                    rgnum[i] = addr_l[i] - 0x40000;
-                    break;
-                default:
-                    usage(argv[0]);
+            size_t nod = strlen(xaddr);  /* calculate the number of digits */
+            if (nod < 5) {                      /* if nod < 5 it's COIL */
+                rtype = COIL;
+            } else if (nod == 5) {              /* calculate the 5th digit */
+                int msd = xaddr[0] - '0';       /* calculate the most significant digit */
+                if (msd > 2) {                  /* if msd > 2 */
+                    rtype = msd - 1;            /* subtract 1 to map address on register type encoding */
+                } else if (msd < 2) {           /* if msd 1 or 0 matches register type encoding */
+                    rtype = msd;
+                } else {                        /* if msd is 2 invalid address */
+                    printf("ERROR: invalid address\n");
                     exit(EXIT_FAILURE);
+                }
+                switch (rtype) {
+                    case COIL:
+                        rgnum[i] = addr_l[i] - 0x0;
+                        break;
+                    case INPUT_B:
+                        rgnum[i] = addr_l[i] - 0x10000;
+                        break;
+                    case INPUT_R:
+                        rgnum[i] = addr_l[i] - 0x30000;
+                        break;
+                    case HOLDING:
+                        rgnum[i] = addr_l[i] - 0x40000;
+                        break;
+                    default:
+                        usage(argv[0]);
+                        exit(EXIT_FAILURE);
+                }
+            } else {                            /* if nod > 5 invalid address */
+                printf("ERROR: invalid address\n");
+                exit(EXIT_FAILURE);
             }
         }
     }
@@ -497,10 +516,6 @@ main(int argc, char **argv)
         /* loop over all addresses or registers */
         for (int i = 0; i <= addr_c; i++) {
             addr = addr_l[i];
-            if (rgac == FALSE) {
-                char *xaddr = hex_to_str(addr);
-                rtype = (xaddr[0] - '0') - 1;
-            }
             if (dnum != 0) {
 
                 /* set print format to decimal */
@@ -514,7 +529,7 @@ main(int argc, char **argv)
                        prfmt
                 );
             }
-            //printf("addr:%x, rtype=%d, len=%d, pfm=%d\n", addr, rtype, len, pfm);
+            printf("addr:%x, rtype=%d, len=%d, pfm=%d\n", addr, rtype, len, pfm);
             switch (rtype) {
                 case COIL:
                 case INPUT_B:
@@ -1441,7 +1456,9 @@ print_dev_reginfo(dvlist_t *lst, int num, int nor)
     }
 }
 
-/* print the program command line usage */
+/*
+ * print the program usage info
+ */
 void
 usage(char *pname)
 {
