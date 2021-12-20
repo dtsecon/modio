@@ -1474,6 +1474,7 @@ usage(char *pname)
     printf("                   4: dot ('.') separated bytes as dec\n");
     printf("                   5: dot ('.') separated bytes as hex\n");
     printf("                   6: high/low register words as dec\n");
+    printf("--reg_inf(o)  [id] print registers' meta data info of device id, if it is available\n");
     printf("--(d)ev_info  [id] id is optional, if defined print registers' info for selected device otherwise\n");
     printf("                   print list of supported devices\n");
     printf("--r(e)ad_all  <id> read all registers' from device with <id> in the list of supported devices\n");
