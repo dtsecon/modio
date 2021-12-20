@@ -40,12 +40,12 @@ REQUIREMENTS
 INSTALLATION
 ------------
 
- 1. **libcofnig**. You can either install libconfig as distribution packages:  
+ 1. **libcofnig**. You can either install libconfig as distribution packages...
 
     * `iibconfig9`   
     * `libconfig-dev`  
 
-    or download compile and install from sources:  
+    ...or download compile and install from sources: 
 
     * `git clone https://github.com/hyperrealm/libconfig` - download the source
     * `cd libconfig`   
@@ -54,16 +54,16 @@ INSTALLATION
     * `make`   
     * `sudo make install`   
 
-    for more details see: 
+    for more details read:
     * `https://github.com/hyperrealm/libconfig/blob/master/INSTALL`
 
  2. **libmodbus**. The latest stable release is available in many Linux distributions.  
-    You can also download, compile and install from the source code :  
+    You can also download, compile and install from the source code: 
 
     * `git clone https://github.com/stephane/libmodbus` - download the source
     * `cd libmodbus`
     * `./autogen.sh`
-    * `./configure --prefix=/usr/local/` - defalut installation prefix=/usr
+    * `./configure --prefix=/usr/local/` - defalut installation `prefix=/usr`
     * `make`
     * `sudo make install`
 
@@ -88,7 +88,7 @@ CONFIGURATION
 -------------
 
 **modio** tool can read or write directly to a modbus register either defined as a register number  
-or address. Register access info is given via a command line switch `--addr, -a`. The register  
+or address. Register access info is given via a command line switch `--addr (-a)`. The register  
 data read from a device are printed on the shell standard output along with additional register  
 meta data.  
 
@@ -108,10 +108,10 @@ specifies the device meta-data...
 
 	device =
 	{
-    	    manfc = "MOXA";
-    	    type = "RIO";
-    	    model = "IoLogik E1200";
-    	    zba = 0;
+	    manfc = "MOXA";
+	    type = "RIO";
+	    model = "IoLogik E1200";
+	    zba = 0;
 	};
 
 ...while the second one specifies the registers' meta-data.
@@ -259,7 +259,14 @@ Examples:
 	~$ modio -p192.168.2.104 -g -a5020 -t2 -r -o2
 	reg: 5020 name: deviceUpTime address: 0x0003139c value: 111048s
 ```
-5. Read all registers from modbus server with ip address 192.168.2.104, using register meta-data info from   
+5. Read starting from modbus INPUT register number 5024 on modbus TCP server with ip address 192.168.2.104, and print   
+   the results as dot ('.') separated bytes in hex format
+
+```
+	~$ modio -p192.168.2.104 -g -a5024 -t2 -r -l3 -f5
+	reg: 5024 address: 0x000313a0 value: 0.90.e8.8b.2d.5a
+```
+6. Read all registers from modbus server with ip address 192.168.2.104, using register meta-data info from   
    device with id 2:
 ```
 	~$ modio -p192.168.2.104 -e2
