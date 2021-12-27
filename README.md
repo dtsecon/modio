@@ -88,17 +88,17 @@ CONFIGURATION
 -------------
 
 **modio** tool can read or write directly to a modbus register either defined as a register number  
-or address. Register access info is given via a command line switch `--addr (-a)`. The register  
+or address. Register access info is given via a command line switch `--reg (-g)`. The register  
 data read from a device are printed on the shell standard output along with additional register  
 meta data.  
 
-	~$ modio -p192.168.2.104 -g -a5020 -t2 -o2 -r  
-	reg: 5020 name: deviceUpTime address: 0x0003139c value: 103598s  
+	~$ modio -p192.168.2.104 -g35021 -o2 -r   
+	reg: 35021 name: deviceUpTime address: 0x0003139c value: 103598s  
 
 Device and register meta-data are not required for **modio** to read or write   
 a register.
 
-	~$ modio -p192.168.2.104 -g -a5020 -t2 -r -l2 -f6
+	~$ modio -p192.168.2.104 -a -g5020 -t2 -r -l2 -f6
 	reg: 5020 address: 0x0003139c value: 105214
 
 
@@ -111,7 +111,7 @@ specifies the device meta-data...
 	    manfc = "MOXA";
 	    type = "RIO";
 	    model = "IoLogik E1200";
-	    zba = 0;
+	    zba = 1;
 	};
 
 ...while the second one specifies the registers' meta-data.
@@ -119,7 +119,7 @@ specifies the device meta-data...
 	regs =
 	(
 	    {
-	        num = 5040;
+	        num = 35041;
 	        addr = 0x0;
 	        len = 30;
 	        type = 2;
@@ -132,7 +132,7 @@ specifies the device meta-data...
 	        print = 3;
 	    },
 	    {
-	        num = 5020;
+	        num = 35021;
 	        addr = 0x0;
 	        type = 2;
 	        len = 2;
@@ -188,9 +188,10 @@ Usage: modio [OPTIONS]...
 --sbit       <val> serial port stop bit (default 1)
 --dbit       <val> serial port data bits (default 8)
 --dev_(i)d   <val> modbus slave device id (default 1)
---(z)ero           modbus zero based addressing (address|register - 1)
---(a)ddr    <val>| memory map address (default address 0x0)
-        <reg_num>| register number (default 1) if -g has been specified
+--(z)ero           disable modbus zero based addressing (address = register - type offset)
+                   example: address = 35021(reg_num) - 30000(type_offset) = 5021
+--re(g)     <val>| register number (default number 0x1)
+        <address>| register address (default 0) if -a has been specified
         <v,v,v,v>  comma separated values of addresses or registers e.g. -a0x40032,0x40101,0x4078
                    example: modio -p/dev/ttyS0 -a0x40032,0x40101,0x4078 -r -t3
 --(r)ead           read data from memory
@@ -199,13 +200,13 @@ Usage: modio [OPTIONS]...
                    length is defined in words or registers and word size depends on register type
                    example: modio -p/dev/ttyS0 -a0x40078 -l3 -r -t3 reads 3 16bit registers
                    starting from address 0x40078
---re(g)_access     read (write) data from (to) register 
+--reg_(a)ddress    read (write) data from (to) register address 
 --reg_(t)ype <val> register type (0:COIL 1:INPUT_BIT 2:INPUT_REG 3:HOLDING, default 0)
 --(f)ormat   <val> format print output (default value 2)
-                   0:bin
-                   1:hex
-                   2:dec
-                   3:ascii
+                   0: bin
+                   1: hex
+                   2: dec
+                   3: ascii
                    4: dot ('.') separated bytes as dec
                    5: dot ('.') separated bytes as hex
                    6: high/low register words as dec
@@ -213,6 +214,7 @@ Usage: modio [OPTIONS]...
 --(d)ev_info  [id] id is optional, if defined print registers' info for selected device otherwise
                    print list of supported devices
 --r(e)ad_all  <id> read all registers' from device with <id> in the list of supported devices
+--debug      <val> print debug messages
 --(h)elp           print usage
 ```
 
@@ -230,40 +232,39 @@ Examples:
 ```
 	~$ modio -d2
 	MOXA IoLogik E1200 RIO
-	NUM   ADDRESS      NAME                                DESCRIPTION                  LEN RANGE      SCALE   ENGU         ACC
-	5040  0x313b0      deviceName                                                       30             1.00                 R  
-	5020  0x3139c      deviceUpTime                                                     2              1.00    s            R  
-	5029  0x313a5      firmwareVersion                                                  2              1.00                 R  
-	5031  0x313a7      firmwareBuildDate                                                2              1.00                 R  
-	5027  0x313a3      lanIp                                                            2              1.00                 R  
-	5024  0x313a0      lanMac                                                           3              1.00                 R  
-	5000  0x31388      modelName                                                        10             1.00                 R  
-	4144  0x1030       watchdogAlarmFlag                                                1              1.00                 R/W
-	1000  0x103e8      DI_counterOverflowFlag              0:Normal,1:Overflow          16             1.00                 R  
-	288   0x120        DI_counterOverflowFlagClear                                      16             1.00                 R/W
-	272   0x110        DI_counterReset                     1: reset to initial value    16             1.00                 R/W
-	256   0x100        DI_counterStatus                    0:STOP,1:START               16             1.00                 R  
-	16    0x30010      DI_counterValue                     high/low word                32             1.00                 R  
-	0     0x10000      DI_status                           0:OFF,1:ON                   16             1.00                 R  
+	NUM    ADDRESS      NAME                                DESCRIPTION                  LEN RANGE      SCALE   ENGU         ACC
+	35041  0x313b0      deviceName                                                       30             1.00                 R  
+	35021  0x3139c      deviceUpTime                                                     2              1.00    s            R  
+	35030  0x313a5      firmwareVersion                                                  2              1.00                 R  
+	35032  0x313a7      firmwareBuildDate                                                2              1.00                 R  
+	35028  0x313a3      lanIp                                                            2              1.00                 R  
+	35025  0x313a0      lanMac                                                           3              1.00                 R  
+	35001  0x31388      modelName                                                        10             1.00                 R  
+	4145   0x1030       watchdogAlarmFlag                                                1              1.00                 R/W
+	11001  0x103e8      DI_counterOverflowFlag              0:Normal,1:Overflow          16             1.00                 R  
+	289    0x120        DI_counterOverflowFlagClear                                      16             1.00                 R/W
+	273    0x110        DI_counterReset                     1: reset to initial value    16             1.00                 R/W
+	257    0x100        DI_counterStatus                    0:STOP,1:START               16             1.00                 R  
+	17     0x30010      DI_counterValue                     high/low word                32             1.00                 R  
+	1      0x10000      DI_status                           0:OFF,1:ON                   16             1.00                 R  
 	...
 ```
-3. Read starting from modbus register at address 0x313b0 on modbus TCP server with ip address 192.168.2.104,    
+3. Read starting from modbus register number 35041 on modbus TCP server with ip address 192.168.2.104,    
    a 30 words long buffer and print the results as an ascii string:
 ```
-	~$ modio -p192.168.2.104 -a0x313b0 -r -l30 -f3
-	reg: 5040 address: 0x000313b0 value: iologik-E1212
+	~$ modio -p192.168.2.104 -g35041 -r -l30 -f3
+	reg: 35041 address: 0x000313b0 value: iologik-E1212
 ```
-4. Read the modbus INPUT register number 5020 on modbus TCP server with ip address 192.168.2.104, and print   
+4. Read the modbus INPUT register address 5020 on modbus TCP server with ip address 192.168.2.104, and print   
    the results using register meta-data info from device with id 2:
 ```
-	~$ modio -p192.168.2.104 -g -a5020 -t2 -r -o2
-	reg: 5020 name: deviceUpTime address: 0x0003139c value: 111048s
+	~$ modio -p192.168.2.104 -a -g5020 -t2 -r -o2
+	reg: 35021 name: deviceUpTime address: 0x0003139c value: 111048s
 ```
-5. Read starting from modbus INPUT register number 5024 on modbus TCP server with ip address 192.168.2.104, and print   
+5. Read starting from modbus INPUT register address 5024 on modbus TCP server with ip address 192.168.2.104, and print   
    the results as dot ('.') separated bytes in hex format
-
 ```
-	~$ modio -p192.168.2.104 -g -a5024 -t2 -r -l3 -f5
+	~$ modio -p192.168.2.104 -a -g5024 -t2 -r -l3 -f5
 	reg: 5024 address: 0x000313a0 value: 0.90.e8.8b.2d.5a
 ```
 6. Read all registers from modbus server with ip address 192.168.2.104, using register meta-data info from   
@@ -271,20 +272,20 @@ Examples:
 ```
 	~$ modio -p192.168.2.104 -e2
 	RIO MOXA IoLogik E1200:
-	REG  NAME                                ADDRESS    VALUE   
-	5040 deviceName                          0x000313b0 iologik-E1212
-	5020 deviceUpTime                        0x0003139c 111461.00s
-	5029 firmwareVersion                     0x000313a5 3.1.0.0
-	5031 firmwareBuildDate                   0x000313a7 319489551.00
-	5027 lanIp                               0x000313a3 192.168.2.104
-	5024 lanMac                              0x000313a0 0.90.e8.8b.2d.5a
-	5000 modelName                           0x00031388 E1212
-	4144 watchdogAlarmFlag                   0x00001030 0
-	1000 DI_counterOverflowFlag              0x000103e8 0
-	1001 DI_counterOverflowFlag              0x000103e9 0
-	1002 DI_counterOverflowFlag              0x000103ea 0
-	1003 DI_counterOverflowFlag              0x000103eb 0
-	1004 DI_counterOverflowFlag              0x000103ec 0
+	REG   NAME                                ADDRESS    VALUE   
+	35041 deviceName                          0x000313b0 iologik-E1212
+	35021 deviceUpTime                        0x0003139c 111461.00s
+	35030 firmwareVersion                     0x000313a5 3.1.0.0
+	35032 firmwareBuildDate                   0x000313a7 319489551.00
+	35028 lanIp                               0x000313a3 192.168.2.104
+	35025 lanMac                              0x000313a0 0.90.e8.8b.2d.5a
+	35001 modelName                           0x00031388 E1212
+	04145 watchdogAlarmFlag                   0x00001030 0
+	11001 DI_counterOverflowFlag              0x000103e8 0
+	11002 DI_counterOverflowFlag              0x000103e9 0
+	11003 DI_counterOverflowFlag              0x000103ea 0
+	11004 DI_counterOverflowFlag              0x000103eb 0
+	11005 DI_counterOverflowFlag              0x000103ec 0
 ```
 
 
