@@ -35,6 +35,15 @@ struct serconf {
 };
 typedef struct serconf serconf_t;
 
+/* read register */
+struct rreg {
+    int reg;                    /* register number */
+    int raddr;                  /* register address */
+    int xaddr;                  /* register hex address */
+    regtype_t rtype;            /* register type */
+};
+typedef struct rreg rreg_t;
+
 /* device register struct */
 struct dreg {
     int num;                    /* register number */

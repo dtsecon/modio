@@ -19,6 +19,7 @@
 #include <libconfig.h>
 #include <hashmap.h>
 #include <getopt.h>
+#include <stdarg.h>
 #include "modio.h"
 
 /* register store arrays */
@@ -72,6 +73,12 @@ void read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum);
 /* print the program usage */
 void usage(char *pname);
 
+/* debug function */
+void modio_debugx(int level, const char *fmt, ...);
+
+/* modio debug level */
+int modio_dbg_lvl = 0;
+
 /*
  * main
  */
@@ -88,20 +95,20 @@ main(int argc, char **argv)
      * option context variables
      */
     int nb = 0;                 /* number of registers */
-    int addr = 0x0;             /* register address */
-    int *addr_l = NULL;         /* list of addresses */
-    int addr_c = 0;             /* count of addresses */
-    int *rgnum = NULL;          /* list of register numbers */
+    int reg = 0x1;              /* register */
+    int xreg = 0x0;             /* register hex address */
+    rreg_t *reg_l = NULL;       /* list of registers */
+    int reg_c = 0;              /* count of registers */
     char *port = NULL;          /* port to connect */
 
     char *tkn;                  /* temp token pointer for strtok */
     int rread = FALSE;          /* register read flag */
     int rwrite = FALSE;         /* register write flag */
     int len = 1;                /* len of read or write */
-    int mget = FALSE;           /* get memory region flag */
-    int rgac = FALSE;           /* register access */
+    int addrac = FALSE;         /* register address access */
+    int dev_info = FALSE;       /* print device info */
     int id = MODBUS_SLAVE_ID;   /* modbus slave id */
-    int zba = FALSE;            /* zero based addressing flag */
+    int zba = TRUE;             /* zero based addressing flag */
     int rall = FALSE;           /* read all device's info flag */
     int dnum = 0;               /* device number for printing registers' info */
     int bfm = 0;                /* print value formatted as '.' separated bytes */
@@ -121,13 +128,15 @@ main(int argc, char **argv)
         BAU = 2,
         PAR = 3,
         SBT = 4,
-        DBT = 5
+        DBT = 5,
+        DBG = 6
     };                          /* option flag values for getopt_long */
     static int verbose_flag;    /* flag set by ‘--verbose’. */
     static int baud_o;          /* flag set by '--baud' */
     static int parity_o;        /* flag set by '--parity' */
     static int sbit_o;          /* flag set by '--sbit' */
     static int dbit_o;          /* flag set by '--dbit' */
+    static int dbglvl_o;        /* flag set by '--debug' */
     static struct option long_options[] = {
 
             {"verbose",     no_argument,       &verbose_flag, VER},
@@ -139,18 +148,19 @@ main(int argc, char **argv)
             {"dbit",        required_argument, &dbit_o,       DBT},
             {"dev_id",      required_argument, 0,             'i'},
             {"zero",              no_argument, 0,             'z'},
-            {"addr",        required_argument, 0,             'a'},
+            {"reg",         required_argument, 0,             'g'},
             {"read",              no_argument, 0,             'r'},
             {"write",       required_argument, 0,             'w'},
             {"len",         required_argument, 0,             'l'},
             {"reg_type",    required_argument, 0,             't'},
-            {"reg_access",        no_argument, 0,             'g'},
+            {"reg_addr",          no_argument, 0,             'a'},
             {"format",      required_argument, 0,             'f'},
             {"dev_info",    optional_argument, 0,             'd'},
             {"read_all",    required_argument, 0,             'e'},
             {"reg_info",    required_argument, 0,             'o'},
             {"help",              no_argument, 0,             'h'},
-            {0,                      0, 0,               0}
+            {"debug",       required_argument, &dbglvl_o,     DBG},
+            {0,                      0, 0,       0}
     };
 
     /* getopt_long stores the option index here. */
@@ -159,10 +169,8 @@ main(int argc, char **argv)
     /* initialize the device list */
     lsz = init_drlist(&dvl);
 
-    /* read device and registers' info from device files */
-    read_dreg(dvl);
 
-    /* initialize register area */
+    /* initialize register memory area */
     init_rrega();
 
     /* if no option specified print usage */
@@ -175,7 +183,7 @@ main(int argc, char **argv)
     int opt;
     while ((opt = getopt_long(argc,
                               argv,
-                              "p:i:za:rw:l:t:gf:d::e:o:h",
+                              "p:i:zarw:l:t:g:f:d::e:o:h",
                               long_options,
                               &option_index)) != -1
                               )
@@ -184,20 +192,26 @@ main(int argc, char **argv)
             case 0:
 
                 /* parse long options without shortcuts */
-                if (baud_o == 1) {
+                if (baud_o == BAU) {
                     sc.baud = (int )strtoul(optarg, NULL, 10);
-                } else if (parity_o == 1) {
+                    baud_o = 0;
+                }
+                if (parity_o == PAR) {
                     sc.prty = *(char *) optarg;
-                } else if (sbit_o == 1) {
-                    sc.sbit = (int) strtoul(optarg, NULL, 10);
-                } else if (dbit_o == 1) {
-                    sc.dbit = (int) strtoul(optarg, NULL, 10);
+                    parity_o = 0;
                 }
-                printf ("my option %s", long_options[option_index].name);
-                if (optarg) {
-                    printf(" with arg %s", optarg);
+                if (sbit_o == SBT) {
+                    sc.sbit = (int )strtoul(optarg, NULL, 10);
+                    sbit_o = 0;
                 }
-                printf ("\n");
+                if (dbit_o == DBT) {
+                    sc.dbit = (int )strtoul(optarg, NULL, 10);
+                    dbit_o = 0;
+                }
+                if (dbglvl_o == DBG) {
+                    modio_dbg_lvl = (int )strtoul(optarg, NULL, 10);
+                    dbit_o = 0;
+                }
                 break;
             case 'p':
                 port = (char *)malloc((strlen(optarg) + 1) * sizeof(char));
@@ -207,27 +221,28 @@ main(int argc, char **argv)
                 id = (int )strtoul(optarg, NULL, 0);
                 break;
             case 'z':
-                zba = TRUE;
+                zba = FALSE;
                 break;
 
-            /* get comma separated regs/addresses in addr_l array */
-            case 'a':
+            /* get comma separated registers/addresses in reg_l array */
+            case 'g':
                 tkn = optarg;
                 while (*tkn) {              /* calculate number of ',' */
                     if (',' == *tkn) {
-                        addr_c++;           /* increase reg/address counter */
+                        reg_c++;            /* increase reg/address counter */
                     }
                     tkn++;
                 }
+                modio_debugx(2, "regs = %d\n", reg_c);
 
-                /* allocate memory for addr_l array with size addr_c */
-                addr_l = (int *)malloc(sizeof(int) * (addr_c + 1));
+                /* allocate memory for reg_l array with size reg_c */
+                reg_l = (rreg_t *)malloc(sizeof(rreg_t) * (reg_c + 1));
                 tkn = strtok(optarg, ",");
-                *addr_l = (int )strtoul(tkn, NULL, 0);
-                if (addr_c != 0) {
+                reg_l->reg = (int )strtoul(tkn, NULL, 0);
+                if (reg_c != 0) {
                     int i = 1;
                     while ((tkn = strtok(NULL, ",")) != NULL) {
-                        *(addr_l + i) = (int )strtoul(tkn, NULL, 0);
+                        (reg_l + i)->reg = (int )strtoul(tkn, NULL, 0);
                         i++;
                     }
                 }
@@ -246,9 +261,9 @@ main(int argc, char **argv)
                 rtype = strtol(optarg, NULL, 10);
                 break;
 
-            /* use registers instead of addresses */
-            case 'g':
-                rgac = TRUE;
+            /* use addresses instead of numbers */
+            case 'a':
+                addrac = TRUE;
                 break;
 
             /*
@@ -269,11 +284,12 @@ main(int argc, char **argv)
                 }
                 break;
             case 'd':
+                dev_info = TRUE;
 
                 /* print registers of a supported device */
                 if (optarg) {
                     dnum = (int) strtoul(optarg, NULL, 0);
-                } else if ( !optarg &&                  /* handle optional opt arg in long option */
+                } else if ( !optarg &&           /* handle optional opt arg in long option */
                      optind < argc &&            /* make sure optind is valid */
                      NULL != argv[optind] &&     /* make sure it's not a null string */
                      '\0' != argv[optind][0] &&  /* ... or an empty string */
@@ -284,20 +300,7 @@ main(int argc, char **argv)
                     char *temp_optarg = argv[optind++];
                     dnum = (int) strtoul(temp_optarg, NULL, 0);
                 }
-                if (dnum) {
-
-                    /* if device number greater than device list size exit */
-                    if (dnum > lsz || dnum == 0) {
-                        print_dev_info(dvl, lsz);
-                        exit(EXIT_FAILURE);
-                    }
-                    print_dev_reginfo(dvl, dnum - 1, dvl[dnum-1].nor);
-
-                    /* print list of supported devices */
-                } else {
-                    print_dev_info(dvl, lsz);
-                }
-                exit(EXIT_SUCCESS);
+                break;
 
             /* print register info from support register file */
             case 'o':
@@ -331,6 +334,16 @@ main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
+    modio_debugx(1,"COM:\n");
+    modio_debugx(1, "port = %s\n", port);
+    modio_debugx(1, "baud = %d\n", sc.baud);
+    modio_debugx(1, "prty = %c\n", sc.prty);
+    modio_debugx(1, "sbit = %d\n", sc.sbit);
+    modio_debugx(1, "dbit = %d\n\n", sc.dbit);
+    modio_debugx(1,"MODBUS:\n");
+    modio_debugx(1, "slave id   = %d\n", id);
+    modio_debugx(1, "device num = %d\n\n", dnum);
+
     /* use DEVICE_PATH if port hasn't been defined */
     if (port == NULL) {
         port = (char *)malloc((strlen(DEVICE_PATH) + 1) * sizeof(char));
@@ -340,6 +353,20 @@ main(int argc, char **argv)
     /* if device number greater than device list size exit */
     if (dnum > lsz) {
         usage(argv[0]);
+        exit(EXIT_SUCCESS);
+    }
+
+    /* read device and registers' info from device files */
+    read_dreg(dvl);
+
+    if (dev_info) {
+        if (dnum) {
+            print_dev_reginfo(dvl, dnum - 1, dvl[dnum-1].nor);
+        } else {
+
+            /* print list of supported devices */
+            print_dev_info(dvl, lsz);
+        }
         exit(EXIT_SUCCESS);
     }
 
@@ -365,7 +392,9 @@ main(int argc, char **argv)
         /* Load reg data into the regmap */
         int r;
         for (int i = 0; i < dvl[dnum - 1].nor; i++) {
-            char *key = strcat(int_to_str(regs[i].type), int_to_str(regs[i].num));
+            //char *key = strcat(int_to_str(regs[i].type), int_to_str(regs[i].num));
+            char *key = int_to_str(regs[i].num);
+            modio_debugx(4, "key: %s\n", key);
             r = hashmap_put(&regmap, key, &regs[i]);
             if (r < 0) {
 
@@ -375,65 +404,72 @@ main(int argc, char **argv)
         }
     }
 
-    /* allocate memory for register array */
-    rgnum = (int *)malloc(sizeof(int) * (addr_c + 1));
-
     /* allocate memory for address array if it's still NULL (-a wasn't present) */
-    if (addr_l == NULL) {
-        addr_l = (int *)malloc(sizeof(int) * (addr_c + 1));
-        *addr_l = 0x0;  /* addr_c = 1 */
+    if (reg_l == NULL) {
+        reg_l = (rreg_t *)malloc(sizeof(rreg_t) * (reg_c + 1));
+        reg_l->reg = reg;  /* reg_c = 1 */
     }
 
-    /* if -g, register based access is enabled calculate register access address */
-    if (rgac) {
+    /* if -a, address based access is enabled calculate register access address */
+    if (addrac) {
 
         /* loop over the register list... */
-        for (int i = 0; i <= addr_c; i++) {
+        for (int i = 0; i <= reg_c; i++) {
 
-            /* calculate the digits of the register number and allocate the proper memory size */
+            /* calculate the digits of the register address and allocate the proper memory size */
             char *hexreg = NULL;
-            if (addr_l[i] != 0) {
-                hexreg = (char *)malloc(sizeof(char) * (int) (log10(addr_l[i]) + 1));
+            if (reg_l[i].reg != 0) {
+                hexreg = (char *)malloc(sizeof(char) * (int) (log10(reg_l[i].reg) + 1));
             } else {
                 hexreg = (char *)malloc(sizeof(char));
             }
-            sprintf(hexreg, "%x", addr_l[i]);
+            sprintf(hexreg, "%x", reg_l[i].reg);
             size_t nod = strlen(hexreg);
-            if (nod > 5) {
+            if (nod > 4) {
                 printf("ERROR: invalid register number\n");
                 exit(EXIT_FAILURE);
             }
-            rgnum[i] = (int )(0x0 + strtoul(hexreg, NULL, 16));
+            reg_l[i].raddr = (int )(0x0 + strtoul(hexreg, NULL, 16));
+            modio_debugx(2, "register type: %d\n", rtype);
+            modio_debugx(2, "register address: %d\n", reg_l[i].raddr);
             switch (rtype) {
                 case COIL:
-                    addr_l[i] = 0x0 + rgnum[i];
+                    reg_l[i].reg = 0 + reg_l[i].raddr + zba;
+                    reg_l[i].xaddr = 0x00000 + reg_l[i].raddr;
                     break;
                 case INPUT_B:
-                    addr_l[i] = 0x10000 + rgnum[i];
+                    reg_l[i].reg = 10000 + reg_l[i].raddr + zba;
+                    reg_l[i].xaddr = 0x10000 + reg_l[i].raddr;
                     break;
                 case INPUT_R:
-                    addr_l[i] = 0x30000 + rgnum[i];
+                    reg_l[i].reg = 30000 + reg_l[i].raddr + zba;
+                    reg_l[i].xaddr = 0x30000 + reg_l[i].raddr;
                     break;
                 case HOLDING:
-                    addr_l[i] = 0x40000 + rgnum[i];
+                    reg_l[i].reg = 40000 + reg_l[i].raddr + zba;
+                    reg_l[i].xaddr = 0x40000 + reg_l[i].raddr;
                     break;
                 default:
                     usage(argv[0]);
                     exit(EXIT_FAILURE);
             }
+            reg_l[i].rtype = rtype;
+            modio_debugx(2, "register: %d\n", reg_l[i].reg);
+            modio_debugx(2, "register hex address: 0x%x\n", reg_l[i].xaddr);
         }
 
-    /* ...otherwise calculate register number from address and store is to rgnum array */
+    /* ...otherwise calculate register address from number and store it into raddr_l array */
     } else {
-        for (int i = 0; i <= addr_c; i++) {
+        for (int i = 0; i <= reg_c; i++) {
 
-            /* if address type access calculate rtype */
-            char *xaddr = hex_to_str(addr_l[i]);
-            size_t nod = strlen(xaddr);  /* calculate the number of digits */
+            /* if register number access, calculate rtype */
+            char *rgnum = int_to_str(reg_l[i].reg);
+            size_t nod = strlen(rgnum);      /* calculate the number of digits */
+            modio_debugx(3,"reg: %s, nod: %d\n", rgnum, nod);
             if (nod < 5) {                      /* if nod < 5 it's COIL */
                 rtype = COIL;
             } else if (nod == 5) {              /* calculate the 5th digit */
-                int msd = xaddr[0] - '0';       /* calculate the most significant digit */
+                int msd = rgnum[0] - '0';       /* calculate the most significant digit */
                 if (msd > 2) {                  /* if msd > 2 */
                     rtype = msd - 1;            /* subtract 1 to map address on register type encoding */
                 } else if (msd < 2) {           /* if msd 1 or 0 matches register type encoding */
@@ -442,37 +478,41 @@ main(int argc, char **argv)
                     printf("ERROR: invalid address\n");
                     exit(EXIT_FAILURE);
                 }
-                switch (rtype) {
-                    case COIL:
-                        rgnum[i] = addr_l[i] - 0x0;
-                        break;
-                    case INPUT_B:
-                        rgnum[i] = addr_l[i] - 0x10000;
-                        break;
-                    case INPUT_R:
-                        rgnum[i] = addr_l[i] - 0x30000;
-                        break;
-                    case HOLDING:
-                        rgnum[i] = addr_l[i] - 0x40000;
-                        break;
-                    default:
-                        usage(argv[0]);
-                        exit(EXIT_FAILURE);
-                }
-            } else {                            /* if nod > 5 invalid address */
+            } else {                            /* if nod > 5 invalid register number */
                 printf("ERROR: invalid address\n");
                 exit(EXIT_FAILURE);
             }
+            modio_debugx(2, "register number: %d\n", reg_l[i].reg);
+            modio_debugx(2, "register type: %d\n", rtype);
+            switch (rtype) {
+                case COIL:
+                    reg_l[i].raddr = reg_l[i].reg - zba - 0;
+                    reg_l[i].xaddr = reg_l[i].raddr + 0x0;
+                    break;
+                case INPUT_B:
+                    reg_l[i].raddr = reg_l[i].reg - zba - 10000;
+                    reg_l[i].xaddr = reg_l[i].raddr + 0x10000;
+                    break;
+                case INPUT_R:
+                    reg_l[i].raddr = reg_l[i].reg - zba - 30000;
+                    reg_l[i].xaddr = reg_l[i].raddr + 0x30000;
+                    break;
+                case HOLDING:
+                    reg_l[i].raddr = reg_l[i].reg - zba - 40000;
+                    reg_l[i].xaddr = reg_l[i].raddr + 0x40000;
+                    break;
+                default:
+                    usage(argv[0]);
+                    exit(EXIT_FAILURE);
+            }
+            reg_l[i].rtype = rtype;
+            modio_debugx(2, "register address: %d\n", reg_l[i].raddr);
+            modio_debugx(2, "register hex address: 0x%x\n", reg_l[i].xaddr);
         }
     }
 
-    /* calculate register address using zero based addressing */
-    for (int i = 0; i <= addr_c; i++) {
-        addr_l[i] = addr_l[i] - zba;
-    }
-
-    /* make current address first address in addr_l array of regs/addresses */
-    addr = addr_l[0];
+    /* make current address first address in reg_l array of regs/addresses */
+    reg = reg_l[0].reg;
 
     /* initialize modbus connection */
     mb = modbus_init(port, sc, id);
@@ -483,21 +523,21 @@ main(int argc, char **argv)
 
     /* if -w <data> and -t 0|3 write <data> to <address> */
     if (rwrite == TRUE && rtype == HOLDING) {
-        rval = modbus_write_register(mb, addr, val);
+        rval = modbus_write_register(mb, reg, val);
         if (rval == -1) {
-            printf("ERROR:(%s) modbus_write_register addr:0x%08x, path:%s\n",
+            printf("ERROR:(%s) modbus_write_register reg:0x%08x, path:%s\n",
                    modbus_strerror(errno),
-                   addr,
+                   reg,
                    port
             );
             exit(EXIT_FAILURE);
         }
     } else if (rwrite == TRUE && rtype == COIL) {
-        rval = modbus_write_bit(mb, addr, val);
+        rval = modbus_write_bit(mb, reg, val);
         if (rval == -1) {
-            printf("ERROR:(%s) modbus_write_bit addr:0x%08x, path:%s\n",
+            printf("ERROR:(%s) modbus_write_bit reg:0x%08x, path:%s\n",
                    modbus_strerror(errno),
-                   addr,
+                   reg,
                    port
             );
             exit(EXIT_FAILURE);
@@ -510,40 +550,54 @@ main(int argc, char **argv)
 
     /* if -r (read register/address) */
     if (rread == TRUE) {
-        uint16_t *reg16p;   /* pointer to 16bit register */
-        uint8_t *reg8p;     /* pointer to 8bit register */
+        uint16_t *reg16p;       /* pointer to 16bit register */
+        uint8_t *reg8p;         /* pointer to 8bit register */
+
+        int len_i = len;        /* save initial len */
 
         /* loop over all addresses or registers */
-        for (int i = 0; i <= addr_c; i++) {
-            addr = addr_l[i];
+        for (int i = 0; i <= reg_c; i++) {
+            reg = reg_l[i].reg;
+            xreg = reg_l[i].xaddr;
             if (dnum != 0) {
+                len = len_i;    /* restore len */
 
                 /* set print format to decimal */
                 int prfmt = 2;
-                len = (hashmap_get(&regmap, strcat(int_to_str(rtype), int_to_str(rgnum[i]))) ?
-                       hashmap_get(&regmap, strcat(int_to_str(rtype), int_to_str(rgnum[i])))->len :
+                rtype = (hashmap_get(&regmap, int_to_str(reg)) ?
+                         hashmap_get(&regmap, int_to_str(reg))->type :
+                         reg_l[i].rtype
+                );
+                len = (hashmap_get(&regmap, int_to_str(reg)) ?
+                       hashmap_get(&regmap, int_to_str(reg))->len :
                        len
-                       );
-                pfm = (hashmap_get(&regmap, strcat(int_to_str(rtype), int_to_str(rgnum[i]))) ?
-                       hashmap_get(&regmap, strcat(int_to_str(rtype), int_to_str(rgnum[i])))->prfmt :
+                );
+                pfm = (hashmap_get(&regmap, int_to_str(reg)) ?
+                       hashmap_get(&regmap, int_to_str(reg))->prfmt :
                        prfmt
                 );
             }
-            printf("addr:%x, rtype=%d, len=%d, pfm=%d\n", addr, rtype, len, pfm);
+            modio_debugx(1, "reg: %d reg_c: %d addr: 0x%x rtype: %d len: %d pfm: %d\n", reg,
+                                                                                                reg_c,
+                                                                                                xreg,
+                                                                                                rtype,
+                                                                                                len,
+                                                                                                pfm
+            );
             switch (rtype) {
                 case COIL:
                 case INPUT_B:
                     if (rtype == COIL) {
-                            rval = modbus_read_bits(mb, addr, len, creg);
+                            rval = modbus_read_bits(mb, xreg, len, creg);
                             reg8p = creg;
                     } else {
-                        rval = modbus_read_input_bits(mb, addr, len, ibreg);
+                        rval = modbus_read_input_bits(mb, xreg, len, ibreg);
                         reg8p = ibreg;
                     }
                     if (rval == -1) {
-                        printf("ERROR:(%s) modbus_read_xx addr:0x%x, count: %d, path: %s\n",
+                        printf("ERROR:(%s) modbus_read_xx reg:0x%x, count: %d, path: %s\n",
                                modbus_strerror(errno),
-                               addr,
+                               reg,
                                len,
                                port
                                );
@@ -552,108 +606,155 @@ main(int argc, char **argv)
                         for (int j = 0; j < len; j++) {
                             if (pfm == BIN) {
                                 if (dnum) {
-                                    printf("reg: %03d name: %-35s address: 0x%08x value: %16s\n",
-                                           rgnum[i] + j,
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))) ?
-                                             hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))->name :
-                                             "UNDEFINED"),
-                                           addr,
-                                           int_to_bin(*(uint16_t *) reg8p)
-                                    );
+                                    const char *fmt_m = "reg: %05d name: %-35s address: 0x%08x value: %16s";
+                                    const char *fmt_s = "reg: %05d name: %s address: 0x%08x value: %16s";
+                                    if (reg_c >= 1 || len > 1) {
+                                        printf(fmt_m,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                                "UNDEFINED"),
+                                               xreg,
+                                               int_to_bin(*(uint16_t *) reg8p)
+                                        );
+                                    } else {
+                                        printf(fmt_s,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                                "UNDEFINED"),
+                                               xreg,
+                                               int_to_bin(*(uint16_t *) reg8p)
+                                        );
+                                    }
                                 } else {
-                                    printf("reg: %03d address: 0x%08x value: %16s\n",
-                                           rgnum[i] + j,
-                                           addr,
+                                    printf("reg: %05d address: 0x%08x value: %16s\n",
+                                           reg_l[i].reg + j,
+                                           xreg,
                                            int_to_bin(*(uint8_t *) reg8p)
                                     );
                                 }
                             } else if (pfm == HEX) {
                                 if (dnum) {
-                                    printf("reg: %03d name: %-35s address: 0x%08x value: 0x%x\n",
-                                           rgnum[i] + j,
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))) ?
-                                            hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                        int_to_str(rgnum[i])))->name :
-                                            "UNDEFINED"),
-                                           addr,
-                                           *(uint8_t *) reg8p
-                                    );
+                                    const char *fmt_m = "reg: %05d name: %-35s address: 0x%08x value: 0x%x\n";
+                                    const char *fmt_s = "reg: %05d name: %s address: 0x%08x value: 0x%x\n";
+                                    if (reg_c >= 1 || len > 1) {
+                                        printf(fmt_m,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                                "UNDEFINED"),
+                                               xreg,
+                                               *(uint8_t *) reg8p
+                                        );
+                                    } else {
+                                        printf(fmt_s,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                                "UNDEFINED"),
+                                               xreg,
+                                               *(uint8_t *) reg8p
+                                        );
+                                    }
                                 } else {
-                                    printf("reg: %03d address: 0x%08x value: 0x%x\n",
-                                           rgnum[i] + j,
-                                           addr,
+                                    printf("reg: %05d address: 0x%08x value: 0x%x\n",
+                                           reg_l[i].reg + j,
+                                           xreg,
                                            *(uint8_t *) reg8p
                                     );
                                 }
                             } else if (pfm == ASC) {
                                 if (dnum) {
-                                    printf("reg: %03d name: %-35s address: 0x%08x value: %s\n",
-                                           rgnum[i] + j,
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i] + j)))) ?
-                                             hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                        int_to_str(rgnum[i] + j)))->name :
-                                             "UNDEFINED"),
-                                           addr,
-                                           (char *) reg8p
-                                    );
+                                    const char *fmt_m = "reg: %05d name: %-35s address: 0x%08x value: %s\n";
+                                    const char *fmt_s = "reg: %05d name: %s address: 0x%08x value: %s\n";
+                                    if (reg_c >= 1) {
+                                        printf(fmt_m,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                                "UNDEFINED"),
+                                               xreg,
+                                               (char *) reg8p
+                                        );
+                                    } else {
+                                        printf(fmt_s,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                                "UNDEFINED"),
+                                               xreg,
+                                               (char *) reg8p
+                                        );
+                                    }
                                 } else {
-                                    printf("reg: %03d address: 0x%08x value: %s\n",
-                                           rgnum[i] + j,
-                                           addr,
+                                    printf("reg: %05d address: 0x%08x value: %s\n",
+                                           reg_l[i].reg + j,
+                                           xreg,
                                            (char *) reg8p
                                     );
                                 }
                                 break;
                             } else if (pfm == DEC) {
                                 if (dnum) {
-                                    printf("reg: %03d name: %-35s address: 0x%08x value: %.2f%s\n",
-                                           rgnum[i] + j,
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))) ?
-                                             hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                        int_to_str(rgnum[i])))->name :
-                                             "UNDEFINED"),
-                                           addr,
-                                           *(uint16_t *)reg8p *
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))) ?
-                                             hashmap_get(&regmap,strcat(int_to_str(rtype),
-                                                                        int_to_str(rgnum[i])))->scale : 1),
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))) ?
-                                             hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))->engu :
-                                             "")
-                                    );
+                                    const char *fmt_m = "reg: %05d name: %-35s address: 0x%08x value: %.2f%s\n";
+                                    const char *fmt_s = "reg: %05d name: %s address: 0x%08x value: %.2f%s\n";
+                                    if (reg_c >= 1 || len > 1) {
+                                        printf(fmt_m,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                                "UNDEFINED"),
+                                               xreg,
+                                               *(uint16_t *) reg8p *
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->scale : 1),
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->engu :
+                                                "")
+                                        );
+                                    } else {
+                                        printf(fmt_s,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                                "UNDEFINED"),
+                                               xreg,
+                                               *(uint16_t *) reg8p *
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->scale : 1),
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->engu :
+                                                "")
+                                        );
+
+                                    }
                                 } else {
-                                    printf("reg: %03d address: 0x%08x value: %d\n",
-                                           rgnum[i] + j,
-                                           addr, *(uint8_t *) reg8p
+                                    printf("reg: %05d address: 0x%08x value: %d\n",
+                                           reg_l[i].reg + j,
+                                           xreg, *(uint8_t *) reg8p
                                     );
                                 }
                             }
                             reg8p++;
-                            addr++;
+                            reg++;
+                            xreg++;
                         }
                     }
                     break;
                 case INPUT_R:
                 case HOLDING:
                     if (rtype == HOLDING) {
-                        rval = modbus_read_registers(mb, addr, len, hreg);
+                        rval = modbus_read_registers(mb, xreg, len, hreg);
                         reg16p = hreg;
                     } else {
-                        rval = modbus_read_input_registers(mb, addr, len, ireg);
+                        rval = modbus_read_input_registers(mb, xreg, len, ireg);
                         reg16p = ireg;
                     }
                     if (rval == -1) {
-                        printf("ERROR:(%s) modbus_read_xx addr: 0x%x count:%d path:%s\n",
+                        printf("ERROR:(%s) modbus_read_xx reg: 0x%x count:%d path:%s\n",
                                modbus_strerror(errno),
-                               addr,
+                               reg,
                                len,
                                port
                         );
@@ -661,60 +762,94 @@ main(int argc, char **argv)
                     } else {
                         for (int j = 0; j < len; j++) {
                             if (pfm == BIN) {
+                                const char *fmt_m = "reg: %05d name: %-35s address: 0x%08x value: %16s";
+                                const char *fmt_s = "reg: %05d name: %s address: 0x%08x value: %16s";
                                 if (dnum) {
-                                    printf("reg: %03d name: %-35s address: 0x%08x value: %16s\n",
-                                           rgnum[i] + j,
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))) ?
-                                             hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                        int_to_str(rgnum[i])))->name :
-                                             "UNDEFINED"),
-                                           addr,
-                                           int_to_bin(*(uint16_t *) reg16p)
-                                    );
+                                    if (reg_c >= 1 || len > 1) {
+                                        printf(fmt_m,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                               "UNDEFINED"),
+                                               xreg,
+                                               int_to_bin(*(uint16_t *) reg16p)
+                                        );
+                                    } else {
+                                        printf(fmt_s,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                               "UNDEFINED"),
+                                               xreg,
+                                               int_to_bin(*(uint16_t *) reg16p)
+                                        );
+                                    }
                                 } else {
-                                    printf("reg: %03d address: 0x%08x value: %16s\n",
-                                           rgnum[i] + j,
-                                           addr,
+                                    printf("reg: %05d address: 0x%08x value: %16s\n",
+                                           reg_l[i].reg + j,
+                                           xreg,
                                            int_to_bin(*(uint16_t *) reg16p)
                                     );
                                 }
                             } else if (pfm == HEX) {
                                 if (dnum) {
-                                    printf("reg: %03d name: %-35s address: 0x%08x value: 0x%x\n",
-                                           rgnum[i] + j,
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))) ?
-                                             hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                        int_to_str(rgnum[i])))->name :
-                                             "UNDEFINED"),
-                                           addr,
-                                           *(uint16_t *) reg16p
-                                    );
+                                    const char *fmt_m = "reg: %05d name: %-35s address: 0x%08x value: 0x%x\n";
+                                    const char *fmt_s = "reg: %05d name: %s address: 0x%08x value: 0x%x\n";
+                                    if (reg_c >= 1 || len > 1) {
+                                        printf(fmt_m,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                               "UNDEFINED"),
+                                               xreg,
+                                               *(uint16_t *) reg16p
+                                        );
+                                    } else {
+                                        printf(fmt_s,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                               "UNDEFINED"),
+                                               xreg,
+                                               *(uint16_t *) reg16p
+                                        );
+
+                                    }
                                 } else {
-                                    printf("reg: %03d address: 0x%08x value: 0x%x\n",
-                                           rgnum[i] + j,
-                                           addr,
+                                    printf("reg: %05d address: 0x%08x value: 0x%x\n",
+                                           reg_l[i].reg + j,
+                                           xreg,
                                            *(uint16_t *) reg16p
                                     );
                                 }
                             } else if (pfm == ASC) {
                                 char *s = words_to_str(reg16p, len);
                                 if (dnum) {
-                                    printf("reg: %03d name: %-35s address: 0x%08x value: %s\n",
-                                           rgnum[i] + j,
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))) ?
-                                             hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                        int_to_str(rgnum[i])))->name :
-                                             "UNDEFINED"),
-                                           addr,
-                                           s
-                                    );
+                                    const char *fmt_m = "reg: %05d name: %-35s address: 0x%08x value: %s\n";
+                                    const char *fmt_s = "reg: %05d name: %s address: 0x%08x value: %s\n";
+                                    if (reg_c >= 1) {
+                                        printf(fmt_m,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                               "UNDEFINED"),
+                                               xreg,
+                                               s
+                                        );
+                                    } else {
+                                        printf(fmt_s,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                               "UNDEFINED"),
+                                               xreg,
+                                               s
+                                        );
+                                    }
                                 } else {
-                                    printf("reg: %03d address: 0x%08x value: %s\n",
-                                           rgnum[i] + j,
-                                           addr,
+                                    printf("reg: %05d address: 0x%08x value: %s\n",
+                                           reg_l[i].reg + j,
+                                           xreg,
                                            s
                                     );
                                 }
@@ -723,20 +858,31 @@ main(int argc, char **argv)
                                 char *s = (pfm == BFD) ? mem_to_bytes(reg16p, len, int_to_str)
                                                        : mem_to_bytes(reg16p, len, hex_to_str);
                                 if (dnum) {
-                                    printf("reg: %03d name: %-35s address: 0x%08x value: %s\n",
-                                           rgnum[i] + j,
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))) ?
-                                            hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                        int_to_str(rgnum[i])))->name :
-                                            "UNDEFINED"),
-                                           addr,
-                                           s
-                                    );
+                                    const char *fmt_m = "reg: %05d name: %-35s address: 0x%08x value: %s\n";
+                                    const char *fmt_s = "reg: %05d name: %s address: 0x%08x value: %s\n";
+                                    if (reg_c >= 1) {
+                                        printf(fmt_m,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                               "UNDEFINED"),
+                                               xreg,
+                                               s
+                                        );
+                                    } else {
+                                        printf(fmt_s,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                               "UNDEFINED"),
+                                               xreg,
+                                               s
+                                        );
+                                    }
                                 } else {
-                                    printf("reg: %03d address: 0x%08x value: %s\n",
-                                           rgnum[i] + j,
-                                           addr,
+                                    printf("reg: %05d address: 0x%08x value: %s\n",
+                                           reg_l[i].reg + j,
+                                           xreg,
                                            s
                                     );
                                 }
@@ -749,25 +895,37 @@ main(int argc, char **argv)
                                 int hlw = len / 2;
                                 for (int k = 0; k < hlw; k++) {
                                     if (dnum) {
-                                        printf("reg: %03d name: %-35s address: 0x%08x value: %li%s\n",
-                                               rgnum[i] + 2 * k,
-                                               ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                             int_to_str(rgnum[i])))) ?
-                                                 hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                            int_to_str(rgnum[i])))->name :
-                                                 "UNDEFINED"),
-                                               addr + 2 * k,
-                                               concat_inv16(reg16p, 2),
-                                               ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                             int_to_str(rgnum[i])))) ?
-                                                 hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                            int_to_str(rgnum[i])))->engu :
-                                                 "")
-                                        );
+                                        const char *fmt_m = "reg: %05d name: %-35s address: 0x%08x value: %li%s\n";
+                                        const char *fmt_s = "reg: %05d name: %s address: 0x%08x value: %li%s\n";
+                                        if (reg_c >= 1) {
+                                            printf(fmt_m,
+                                                   reg_l[i].reg + 2 * k,
+                                                   ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                     hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                                   "UNDEFINED"),
+                                                   xreg + 2 * k,
+                                                   concat_inv16(reg16p, 2),
+                                                   ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                     hashmap_get(&regmap, int_to_str(reg_l[i].reg))->engu :
+                                                   "")
+                                            );
+                                        } else {
+                                            printf(fmt_s,
+                                                   reg_l[i].reg + 2 * k,
+                                                   ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                     hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                                   "UNDEFINED"),
+                                                   xreg + 2 * k,
+                                                   concat_inv16(reg16p, 2),
+                                                   ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                     hashmap_get(&regmap, int_to_str(reg_l[i].reg))->engu :
+                                                   "")
+                                            );
+                                        }
                                     } else {
-                                        printf("reg: %03d address: 0x%08x value: %li\n",
-                                               rgnum[i] + 2 * k,
-                                               addr,
+                                        printf("reg: %05d address: 0x%08x value: %li\n",
+                                               reg_l[i].reg + 2 * k,
+                                               xreg + 2  * k,
                                                concat_inv16(reg16p, 2)
                                         );
                                     }
@@ -776,29 +934,41 @@ main(int argc, char **argv)
                                 break;
                             } else if (pfm == DEC) {
                                 if (dnum) {
-                                    printf("reg: %03d name: %-35s address: 0x%08x value: %.2f%s\n",
-                                           rgnum[i] + j,
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))) ?
-                                            hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                        int_to_str(rgnum[i])))->name :
-                                            "UNDEFINED"),
-                                           addr,
-                                           *(uint16_t *) reg16p *
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))) ?
-                                            hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                        int_to_str(rgnum[i])))->scale : 1),
-                                           ((hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                         int_to_str(rgnum[i])))) ?
-                                            hashmap_get(&regmap, strcat(int_to_str(rtype),
-                                                                        int_to_str(rgnum[i])))->engu :
-                                            "")
-                                    );
+                                    const char *fmt_m = "reg: %05d name: %-35s address: 0x%08x value: %.2f%s\n";
+                                    const char *fmt_s = "reg: %05d name: %s address: 0x%08x value: %.2f%s\n";
+                                    if (reg_c >= 1 || len > 1) {
+                                        printf(fmt_m,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                                "UNDEFINED"),
+                                               xreg,
+                                               *(uint16_t *) reg16p *
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->scale : 1),
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->engu :
+                                                "")
+                                        );
+                                    } else {
+                                        printf(fmt_s,
+                                               reg_l[i].reg + j,
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
+                                                "UNDEFINED"),
+                                               xreg,
+                                               *(uint16_t *) reg16p *
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->scale : 1),
+                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
+                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->engu :
+                                                "")
+                                        );
+                                    }
                                 } else {
-                                    printf("reg: %03d address: 0x%08x value: %d\n",
-                                           rgnum[i] + j,
-                                           addr,
+                                    printf("reg: %05d address: 0x%08x value: %d\n",
+                                           reg_l[i].reg + j,
+                                           xreg,
                                            *(uint16_t *) reg16p
                                     );
                                 }
@@ -806,7 +976,7 @@ main(int argc, char **argv)
                                 printf("pfm = %d\n", pfm);
                             }
                             reg16p++;
-                            addr++;
+                            reg++;
                         }
                     }
                     break;
@@ -834,18 +1004,17 @@ read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
     int rval;
 
     printf("%s %s %s:\n", dvl[dnum].type, dvl[dnum].manfc, dvl[dnum].model);
-    printf("%-4s %-35s %-10s %-8s\n", "REG", "NAME", "ADDRESS", "VALUE");
+    printf("%-5s %-35s %-10s %-8s\n", "REG", "NAME", "ADDRESS", "VALUE");
     dreg_t *r = dvl[dnum].regs;
     for (int i = 0; i < dvl[dnum].nor; i++) {
         switch(r[i].type) {
             case COIL:
             case INPUT_B:
+                addr = r[i].addr;
                 if (r[i].type == COIL) {
-                    addr = 0x0 + r[i].num - dvl[dnum].zba;
                     rval = modbus_read_bits(mb, addr, r[i].len, creg);
                     reg8p = creg;
                 } else {
-                    addr = 0x10000 + r[i].num - dvl[dnum].zba;
                     rval = modbus_read_input_bits(mb, addr, r[i].len, ibreg);
                     reg8p = ibreg;
                 }
@@ -859,28 +1028,28 @@ read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
                 } else {
                     for (int j = 0; j < r[i].len; j++) {
                         if (r[i].prfmt == BIN) {
-                            printf("%04d %-35s 0x%08x %s\n",
+                            printf("%05d %-35s 0x%08x %s\n",
                                    r[i].num + j,
                                    r[i].name,
                                    r[i].addr + j,
                                    int_to_bin(*(uint16_t *) reg8p)
                             );
                         } else if (r[i].prfmt == HEX) {
-                            printf("%04d %-35s 0x%08x 0x%x\n",
+                            printf("%05d %-35s 0x%08x 0x%x\n",
                                    r[i].num + j,
                                    r[i].name,
                                    r[i].addr + j,
                                    *reg8p
                             );
                         } else if (r[i].prfmt == ASC) {
-                            printf("%04d %-35s 0x%08x %s\n",
+                            printf("%05d %-35s 0x%08x %s\n",
                                    r[i].num + j,
                                    r[i].name,
                                    r[i].addr + j,
                                    (char *) reg8p
                             );
                         } else {
-                            printf("%04d %-35s 0x%08x %d\n",
+                            printf("%05d %-35s 0x%08x %d\n",
                                    r[i].num + j,
                                    r[i].name,
                                    r[i].addr + j,
@@ -893,12 +1062,11 @@ read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
                 break;
             case INPUT_R:
             case HOLDING:
+                addr = r[i].addr;
                 if (r[i].type == HOLDING) {
-                    addr = 0x40000 + r[i].num - dvl[dnum].zba;
                     rval = modbus_read_registers(mb, addr, r[i].len, hreg);
                     reg16p = hreg;
                 } else {
-                    addr = 0x30000 + r[i].num - dvl[dnum].zba;
                     rval = modbus_read_input_registers(mb, addr, r[i].len, ireg);
                     reg16p = ireg;
                 }
@@ -912,14 +1080,14 @@ read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
                 }
                 for (int j = 0; j < r[i].len; j++) {
                     if (r[i].prfmt == BIN) {
-                        printf("%04d %-35s 0x%08x %s\n",
+                        printf("%05d %-35s 0x%08x %s\n",
                                r[i].num,
                                r[i].name,
                                r[i].addr + j,
                                int_to_bin(*(uint16_t *) reg16p)
                         );
                     } else if (r[i].prfmt == HEX) {
-                        printf("%04d %-35s 0x%08x 0x%x\n",
+                        printf("%05d %-35s 0x%08x 0x%x\n",
                                r[i].num,
                                r[i].name,
                                r[i].addr + j,
@@ -927,7 +1095,7 @@ read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
                         );
                     } else if (r[i].prfmt == ASC) {
                         char *s = words_to_str(reg16p, r[i].len);
-                        printf("%04d %-35s 0x%08x %s\n",
+                        printf("%05d %-35s 0x%08x %s\n",
                                r[i].num,
                                r[i].name,
                                r[i].addr + j,
@@ -936,7 +1104,7 @@ read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
                         break;
                     } else if (r[i].prfmt == BFX) {
                         char *s = mem_to_bytes(reg16p, r[i].len, hex_to_str);
-                        printf("%04d %-35s 0x%08x %s\n",
+                        printf("%05d %-35s 0x%08x %s\n",
                                r[i].num,
                                r[i].name,
                                r[i].addr + j,
@@ -945,7 +1113,7 @@ read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
                         break;
                     } else if (r[i].prfmt == BFD) {
                         char *s = mem_to_bytes(reg16p, r[i].len, int_to_str);
-                        printf("%04d %-35s 0x%08x %s\n",
+                        printf("%05d %-35s 0x%08x %s\n",
                                r[i].num,
                                r[i].name,
                                r[i].addr + j,
@@ -959,7 +1127,7 @@ read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
                         }
                         int hlw = r[i].len / 2;
                         for (int k = 0; k < hlw; k++) {
-                            printf("%04d %-35s 0x%08x %.2f%s\n",
+                            printf("%05d %-35s 0x%08x %.2f%s\n",
                                    r[i].num + 2 * k,
                                    r[i].name,
                                    r[i].addr + 2 * k,
@@ -971,7 +1139,7 @@ read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
                        break;
                     } else {
                         if (r[i].len == 2) {
-                            printf("%04d %-35s 0x%08x %li%s\n",
+                            printf("%05d %-35s 0x%08x %li%s\n",
                                    r[i].num,
                                    r[i].name,
                                    r[i].addr + j,
@@ -980,7 +1148,7 @@ read_dev_regs(modbus_t *mb, dvlist_t *dvl, int dnum)
                             );
                             break;
                         } else {
-                            printf("%04d %-35s 0x%08x %.2f%s\n",
+                            printf("%05d %-35s 0x%08x %.2f%s\n",
                                    r[i].num + j,
                                    r[i].name,
                                    r[i].addr + j,
@@ -1278,7 +1446,9 @@ read_dreg(dvlist_t *lst)
         fprintf(stderr, "Error: Failed to open devices' directory\n");
         exit(EXIT_FAILURE);
     }
+    modio_debugx(3, "DEVICES:\n");
     while ((in_file = readdir(FD))) {
+
         /* On linux/Unix we don't want current and parent directories */
         if (!strcmp (in_file->d_name, ".")) {
             continue;
@@ -1286,7 +1456,6 @@ read_dreg(dvlist_t *lst)
         if (!strcmp (in_file->d_name, "..")) {
             continue;
         }
-
         path = (char *)malloc((strlen(REGISTER_PATH) + strlen(in_file->d_name) + 1) * sizeof(char));
         if (!path) {
             fprintf(stderr, "malloc failed: insufficient memory!\n");
@@ -1339,6 +1508,11 @@ read_dreg(dvlist_t *lst)
             exit(EXIT_FAILURE);
         }
 
+        modio_debugx(3, "manfc: %s type: %s model: %s zba: %d\n", dvl->manfc,
+                                                                           dvl->type,
+                                                                           dvl->model,
+                                                                           dvl->zba
+                    );
         /* Output a list of all books in the inventory. */
         regs = config_lookup(&cfg, "regs");
         if (regs != NULL) {
@@ -1378,6 +1552,8 @@ read_dreg(dvlist_t *lst)
                     strcpy(r->engu, engu);
                     r->acc = (char *)malloc((strlen(access) + 1) * sizeof(char));
                     strcpy(r->acc, access);
+
+                    modio_debugx(3, "reg: %-5d name: %s ", r->num, r->name);
                     if (r->addr == 0) {
 
                         /* calculate the digits of the register number and allocate the proper memory size */
@@ -1391,25 +1567,30 @@ read_dreg(dvlist_t *lst)
                         int rnum = (int )(0x0 + strtoul(hexreg, NULL, 16));
                         switch (r->type) {
                             case COIL:
-                                r->addr = 0x0 + rnum;
+                                r->addr = 0x0 + rnum - dvl->zba;
                                 break;
                             case INPUT_B:
-                                r->addr = 0x10000 + rnum;
+                                rnum -= 10000;
+                                r->addr = 0x10000 + rnum - dvl->zba;
                                 break;
                             case INPUT_R:
-                                r->addr = 0x30000 + rnum;
+                                rnum -= 30000;
+                                r->addr = 0x30000 + rnum - dvl->zba;
                                 break;
                             case HOLDING:
-                                r->addr = 0x40000 + rnum;
+                                rnum -= 40000;
+                                r->addr = 0x40000 + rnum - dvl->zba;
                                 break;
                             default:
                                 printf("Invalid register type\n");
                         }
+                        modio_debugx(3, "addr: 0x%x\n", r->addr);
                         free(hexreg);
                     }
                     r++;
                 }
             }
+            modio_debugx(3, "nor: %d\n\n", dvl->nor);
         }
         config_destroy(&cfg);
         free(path);
@@ -1457,6 +1638,22 @@ print_dev_reginfo(dvlist_t *lst, int num, int nor)
 }
 
 /*
+ * debug function
+ */
+void
+modio_debugx(int level, const char *fmt, ...) {
+    int rval;
+    va_list va;
+
+    if (modio_dbg_lvl < level) {
+        return;
+    }
+    va_start(va, fmt);
+    rval = vprintf(fmt, va);
+    va_end(va);
+}
+
+/*
  * print the program usage info
  */
 void
@@ -1470,9 +1667,10 @@ usage(char *pname)
     printf("--sbit       <val> serial port stop bit (default 1)\n");
     printf("--dbit       <val> serial port data bits (default 8)\n");
     printf("--dev_(i)d   <val> modbus slave device id (default 1)\n");
-    printf("--(z)ero           modbus zero based addressing (address|register - 1)\n");
-    printf("--(a)ddr    <val>| memory map address (default address 0x0)\n");
-    printf("        <reg_num>| register number (default 1) if -g has been specified\n");
+    printf("--(z)ero           disable modbus zero based addressing (address = register - type offset)\n");
+    printf("                   example: address = 35021(reg_num) - 30000(type_offset) = 5021\n");
+    printf("--re(g)     <val>| register number (default number 0x1)\n");
+    printf("        <address>| register address (default 0) if -a has been specified\n");
     printf("        <v,v,v,v>  comma separated values of addresses or registers e.g. -a0x40032,0x40101,0x4078\n");
     printf("                   example: modio -p/dev/ttyS0 -a0x40032,0x40101,0x4078 -r -t3\n");
     printf("--(r)ead           read data from memory\n");
@@ -1481,13 +1679,13 @@ usage(char *pname)
     printf("                   length is defined in words or registers and word size depends on register type\n");
     printf("                   example: modio -p/dev/ttyS0 -a0x40078 -l3 -r -t3 reads 3 16bit registers\n");
     printf("                   starting from address 0x40078\n");
-    printf("--re(g)_access     read (write) data from (to) register \n");
+    printf("--reg_(a)ddress    read (write) data from (to) register address \n");
     printf("--reg_(t)ype <val> register type (0:COIL 1:INPUT_BIT 2:INPUT_REG 3:HOLDING, default 0)\n");
     printf("--(f)ormat   <val> format print output (default value 2)\n");
-    printf("                   0:bin\n");
-    printf("                   1:hex\n");
-    printf("                   2:dec\n");
-    printf("                   3:ascii\n");
+    printf("                   0: bin\n");
+    printf("                   1: hex\n");
+    printf("                   2: dec\n");
+    printf("                   3: ascii\n");
     printf("                   4: dot ('.') separated bytes as dec\n");
     printf("                   5: dot ('.') separated bytes as hex\n");
     printf("                   6: high/low register words as dec\n");
@@ -1495,5 +1693,6 @@ usage(char *pname)
     printf("--(d)ev_info  [id] id is optional, if defined print registers' info for selected device otherwise\n");
     printf("                   print list of supported devices\n");
     printf("--r(e)ad_all  <id> read all registers' from device with <id> in the list of supported devices\n");
+    printf("--debug      <val> print debug messages\n");
     printf("--(h)elp           print usage\n");
 }
