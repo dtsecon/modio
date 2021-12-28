@@ -512,7 +512,7 @@ main(int argc, char **argv)
     }
 
     /* make current address first address in reg_l array of regs/addresses */
-    reg = reg_l[0].reg;
+    xreg = reg_l[0].xaddr;
 
     /* initialize modbus connection */
     mb = modbus_init(port, sc, id);
@@ -522,30 +522,48 @@ main(int argc, char **argv)
     }
 
     /* if -w <data> and -t 0|3 write <data> to <address> */
-    if (rwrite == TRUE && rtype == HOLDING) {
-        rval = modbus_write_register(mb, reg, val);
-        if (rval == -1) {
-            printf("ERROR:(%s) modbus_write_register reg:0x%08x, path:%s\n",
-                   modbus_strerror(errno),
-                   reg,
-                   port
+    if (rwrite == TRUE) {
+        for (int i = 0; i <= reg_c; i++) {
+            reg = reg_l[0].reg;
+            xreg = reg_l[i].xaddr;
+            rtype = (hashmap_get(&regmap, int_to_str(reg)) ?
+                     hashmap_get(&regmap, int_to_str(reg))->type :
+                     reg_l[i].rtype
             );
-            exit(EXIT_FAILURE);
-        }
-    } else if (rwrite == TRUE && rtype == COIL) {
-        rval = modbus_write_bit(mb, reg, val);
-        if (rval == -1) {
-            printf("ERROR:(%s) modbus_write_bit reg:0x%08x, path:%s\n",
-                   modbus_strerror(errno),
-                   reg,
-                   port
+            len = (hashmap_get(&regmap, int_to_str(reg)) ?
+                   hashmap_get(&regmap, int_to_str(reg))->len :
+                   len
             );
-            exit(EXIT_FAILURE);
+            modio_debugx(2, "reg: %d, addr: 0x%x type: %d val:%d\n", reg, xreg, rtype, val);
+            for (int j = 0; j < len; j++) {
+                if (rtype == HOLDING) {
+                    rval = modbus_write_register(mb, xreg, val);
+                    if (rval == -1) {
+                        printf("ERROR:(%s) modbus_write_register reg:0x%08x, path:%s\n",
+                               modbus_strerror(errno),
+                               reg,
+                               port
+                        );
+                        exit(EXIT_FAILURE);
+                    }
+                } else if (rtype == COIL) {
+                    rval = modbus_write_bit(mb, xreg, val);
+                    if (rval == -1) {
+                        printf("ERROR:(%s) modbus_write_bit reg:0x%08x, path:%s\n",
+                               modbus_strerror(errno),
+                               reg,
+                               port
+                        );
+                        exit(EXIT_FAILURE);
+                    }
+                } else if (rwrite == TRUE) {
+                    printf("Invalid type of register to write\n");
+                    usage(argv[0]);
+                    exit(EXIT_FAILURE);
+                }
+                xreg++;
+            }
         }
-    } else if (rwrite == TRUE) {
-        printf("Invalid type of register to write\n");
-        usage(argv[0]);
-        exit(EXIT_FAILURE);
     }
 
     /* if -r (read register/address) */
@@ -615,7 +633,7 @@ main(int argc, char **argv)
                                                  hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
                                                 "UNDEFINED"),
                                                xreg,
-                                               int_to_bin(*(uint16_t *) reg8p)
+                                               int_to_bin(*(uint8_t *) reg8p)
                                         );
                                     } else {
                                         printf(fmt_s,
@@ -624,7 +642,7 @@ main(int argc, char **argv)
                                                  hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
                                                 "UNDEFINED"),
                                                xreg,
-                                               int_to_bin(*(uint16_t *) reg8p)
+                                               int_to_bin(*(uint8_t *) reg8p)
                                         );
                                     }
                                 } else {
@@ -706,7 +724,7 @@ main(int argc, char **argv)
                                                  hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
                                                 "UNDEFINED"),
                                                xreg,
-                                               *(uint16_t *) reg8p *
+                                               *(uint8_t *) reg8p *
                                                ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
                                                  hashmap_get(&regmap, int_to_str(reg_l[i].reg))->scale : 1),
                                                ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
@@ -720,7 +738,7 @@ main(int argc, char **argv)
                                                  hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
                                                 "UNDEFINED"),
                                                xreg,
-                                               *(uint16_t *) reg8p *
+                                               *(uint8_t *) reg8p *
                                                ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
                                                  hashmap_get(&regmap, int_to_str(reg_l[i].reg))->scale : 1),
                                                ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
@@ -1671,14 +1689,14 @@ usage(char *pname)
     printf("                   example: address = 35021(reg_num) - 30000(type_offset) = 5021\n");
     printf("--re(g)     <val>| register number (default number 0x1)\n");
     printf("        <address>| register address (default 0) if -a has been specified\n");
-    printf("        <v,v,v,v>  comma separated values of addresses or registers e.g. -a0x40032,0x40101,0x4078\n");
-    printf("                   example: modio -p/dev/ttyS0 -a0x40032,0x40101,0x4078 -r -t3\n");
-    printf("--(r)ead           read data from memory\n");
-    printf("--(w)rite    <val> write data to address or register\n");
-    printf("--(l)en      <val> length of read count from address or register (default 1)\n");
-    printf("                   length is defined in words or registers and word size depends on register type\n");
-    printf("                   example: modio -p/dev/ttyS0 -a0x40078 -l3 -r -t3 reads 3 16bit registers\n");
-    printf("                   starting from address 0x40078\n");
+    printf("        <v,v,v,v>  comma separated values of register numbers or addresses\n");
+    printf("                   example: modio -p/dev/ttyUSB0 --baud 38400 --parity E -g40032,40101,40078 -r\n");
+    printf("--(r)ead           read data from register number or address\n");
+    printf("--(w)rite    <val> write data to addresses or register numbers\n");
+    printf("--(l)en      <val> length of read count from register number or address (default 1)\n");
+    printf("                   length is defined in words and word size depends on register type\n");
+    printf("                   example: modio -p/dev/ttyUSB0 --baud 38400 --parity E -g18 -a -t3 -r reads 3\n");
+    printf("                   16bit registers starting from address 0x40078\n");
     printf("--reg_(a)ddress    read (write) data from (to) register address \n");
     printf("--reg_(t)ype <val> register type (0:COIL 1:INPUT_BIT 2:INPUT_REG 3:HOLDING, default 0)\n");
     printf("--(f)ormat   <val> format print output (default value 2)\n");
