@@ -1,10 +1,29 @@
-/**
- * modio - modbus input output command line tool
+/*
+ *  modio - modbus input output command line tool
  *
- *  A generic tool for read and write modbus registers. It supports modbus
- *  RTU and modbus TCP connections. Device and register information can be
- *  supplied as external structured configuration files and used to format
- *  the read data.
+ *  A generic tool for read and write modbus registers. It supports
+ *  modbus RTU and modbus TCP connections. Device and register
+ *  information can be supplied as external structured configuration
+ *  files and used to format the read data. For more information of
+ *  modio tool, bug reports and feature suggestions, or to track
+ *  changes visit: https://github.com/dtsecon/modio
+ *
+ *  Copyright (C) 2022, Dimitris Economou (dimitris.s.economou@gmail.com)
+ *
+ *  This file is part of modio.
+ *
+ *  modio is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  modio is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with modio.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include <stdio.h>
@@ -1687,13 +1706,14 @@ usage(char *pname)
     printf("--dev_(i)d   <val> modbus slave device id (default 1)\n");
     printf("--(z)ero           disable modbus zero based addressing (address = register - type offset)\n");
     printf("                   example: address = 35021(reg_num) - 30000(type_offset) = 5021\n");
-    printf("--re(g)     <val>| register number (default number 0x1)\n");
+    printf("--re(g)     <val>| register number (default number 1)\n");
     printf("        <address>| register address (default 0) if -a has been specified\n");
     printf("        <v,v,v,v>  comma separated values of register numbers or addresses\n");
     printf("                   example: modio -p/dev/ttyUSB0 --baud 38400 --parity E -g40032,40101,40078 -r\n");
     printf("--(r)ead           read data from register number or address\n");
-    printf("--(w)rite    <val> write data to addresses or register numbers\n");
-    printf("--(l)en      <val> length of read count from register number or address (default 1)\n");
+    printf("--(w)rite    <val> write <val> to addresses or register numbers, if multiple registers defined <val>\n");
+    printf("                   is written to all registers with the proper type casting\n");
+    printf("--(l)en      <val> length of read/write count from register number or address (default 1)\n");
     printf("                   length is defined in words and word size depends on register type\n");
     printf("                   example: modio -p/dev/ttyUSB0 --baud 38400 --parity E -g18 -a -t3 -r reads 3\n");
     printf("                   16bit registers starting from address 0x40078\n");
