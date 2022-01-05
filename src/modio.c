@@ -1661,14 +1661,33 @@ print_dev_reginfo(dvlist_t *lst, int num, int nor)
 {
     dvlist_t *dvl = lst;
     dreg_t *regs = dvl[num].regs;
+    uint32_t dmxl = 90;             /* description max length */
+    uint32_t dl = 0;                /* description length */
 
     printf("%s %s %s\n", dvl[num].manfc, dvl[num].model, dvl[num].type);
     printf("%-5s %-12s %-35s %-90s %-3s %-10s %-7s %-12s %-3s\n", "NUM", "ADDRESS", "NAME",
            "DESCRIPTION", "LEN", "RANGE", "SCALE", "ENGU", "ACC");
     int cnt = 0;
     while (cnt < nor) {
-        printf("%-5d 0x%-10x %-35s %-90s %-3d %-10s %-7.2f %-12s %-3s\n", regs->num, regs->addr, regs->name,
-                regs->desc, regs->len, regs->range, regs->scale, regs->engu, regs->acc);
+
+        /* if size of description less equal to max length... */
+        if ((dl = strlen(regs->desc)) <= dmxl) {
+            printf("%-5d 0x%-10x %-35s %-90s %-3d %-10s %-7.2f %-12s %-3s\n", regs->num, regs->addr, regs->name,
+                   regs->desc, regs->len, regs->range, regs->scale, regs->engu, regs->acc);
+
+        /* ...else split description in two lines */
+        } else {
+            char *s_b = malloc((dl - dmxl + 1) * sizeof(char));
+            char *s_a = malloc((dmxl + 1) * sizeof(char));
+            strcpy(s_b, regs->desc + dmxl);
+            strncpy(s_a, regs->desc, dmxl);
+            strcpy(s_a + dmxl, "");
+            printf("%-5d 0x%-10x %-35s %-90s %-3d %-10s %-7.2f %-12s %-3s\n", regs->num, regs->addr, regs->name,
+                   s_a, regs->len, regs->range, regs->scale, regs->engu, regs->acc);
+            printf("%-5s   %-10s %-35s %-90s\n", "", "", "", s_b);
+            free(s_a);
+            free(s_b);
+        }
         cnt++;
         regs++;
     }
