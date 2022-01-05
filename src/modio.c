@@ -48,7 +48,7 @@ uint8_t creg[REG_SIZE];     /* store coil registers */
 uint8_t ibreg[REG_SIZE];    /* store input bit registers */
 
 /* return a string with binary representation of inum */
-char *int_to_bin(uint inum);
+char *int_to_bin(uint16_t inum);
 
 /* convert an integer to string */
 char *int_to_str(int inum);
@@ -1241,16 +1241,16 @@ mem_to_bytes(uint16_t *array, int size, char *(*conv)(int)) {
  * return a string with binary representation of inum
  */
 char *
-int_to_bin(uint inum)
+int_to_bin(uint16_t inum)
 {
-    size_t bits = sizeof(int) * CHAR_BIT;
+    size_t bits = sizeof(uint16_t) * CHAR_BIT;
 
     char * str = malloc((bits + 1) * sizeof(char));
     if(!str) return NULL;
     str[bits] = 0;
 
     // type punning because signed shift is implementation-defined
-    uint32_t u = *(unsigned *) & inum;
+    uint16_t u = *(unsigned *) & inum;
     for(; bits--; u >>= 1)
         str[bits] = u & 1 ? '1' : '0';
 
