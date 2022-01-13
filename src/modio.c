@@ -545,14 +545,16 @@ main(int argc, char **argv)
         for (int i = 0; i <= reg_c; i++) {
             reg = reg_l[0].reg;
             xreg = reg_l[i].xaddr;
-            rtype = (hashmap_get(&regmap, int_to_str(reg)) ?
-                     hashmap_get(&regmap, int_to_str(reg))->type :
-                     reg_l[i].rtype
-            );
-            len = (hashmap_get(&regmap, int_to_str(reg)) ?
-                   hashmap_get(&regmap, int_to_str(reg))->len :
-                   len
-            );
+            if (dnum != 0) {
+                rtype = (hashmap_get(&regmap, int_to_str(reg)) ?
+                         hashmap_get(&regmap, int_to_str(reg))->type :
+                         reg_l[i].rtype
+                );
+                len = (hashmap_get(&regmap, int_to_str(reg)) ?
+                       hashmap_get(&regmap, int_to_str(reg))->len :
+                       len
+                );
+            }
             modio_debugx(2, "reg: %d, addr: 0x%x type: %d val:%d\n", reg, xreg, rtype, val);
             for (int j = 0; j < len; j++) {
                 if (rtype == HOLDING) {
@@ -734,8 +736,8 @@ main(int argc, char **argv)
                                 break;
                             } else if (pfm == DEC) {
                                 if (dnum) {
-                                    const char *fmt_m = "reg: %05d name: %-35s address: 0x%08x value: %.2f%s\n";
-                                    const char *fmt_s = "reg: %05d name: %s address: 0x%08x value: %.2f%s\n";
+                                    const char *fmt_m = "reg: %05d name: %-35s address: 0x%08x value: %d\n";
+                                    const char *fmt_s = "reg: %05d name: %s address: 0x%08x value: %d\n";
                                     if (reg_c >= 1 || len > 1) {
                                         printf(fmt_m,
                                                reg_l[i].reg + j,
@@ -743,12 +745,7 @@ main(int argc, char **argv)
                                                  hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
                                                 "UNDEFINED"),
                                                xreg,
-                                               *(uint8_t *) reg8p *
-                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
-                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->scale : 1),
-                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
-                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->engu :
-                                                "")
+                                               *(uint8_t *) reg8p
                                         );
                                     } else {
                                         printf(fmt_s,
@@ -757,12 +754,7 @@ main(int argc, char **argv)
                                                  hashmap_get(&regmap, int_to_str(reg_l[i].reg))->name :
                                                 "UNDEFINED"),
                                                xreg,
-                                               *(uint8_t *) reg8p *
-                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
-                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->scale : 1),
-                                               ((hashmap_get(&regmap, int_to_str(reg_l[i].reg))) ?
-                                                 hashmap_get(&regmap, int_to_str(reg_l[i].reg))->engu :
-                                                "")
+                                               *(uint8_t *) reg8p
                                         );
 
                                     }
