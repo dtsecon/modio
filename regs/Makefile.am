@@ -2,5 +2,5 @@
 #
 # regs/Makefile.am
 
-modio_DATA = adele_cbi2801224a.cfg \
+modio_DATA = adelsystem_cbi2801224a.cfg \
 	     moxa_iologik_e1200.cfg
