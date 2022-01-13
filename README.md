@@ -78,7 +78,7 @@ INSTALLATION
  4. **modio**. Build and install modio:
     * `git clone https://github.com/dtsecon/modio`- download the source
     * `cd modio`
-    * `./autoreconf `
+    * `./autogen.sh `
     * `./configure` - default installation prefix=/usr/local
     * `make`
     * `make install`
@@ -262,7 +262,7 @@ Examples:
 	reg: 35021 name: deviceUpTime address: 0x0003139c value: 111048s
 ```
 5. Read starting from modbus INPUT register address 5024 on modbus TCP server with ip address 192.168.2.104, and print   
-   the results as dot ('.') separated bytes in hex format
+   the results as dot ('.') separated bytes in hex format:
 ```
 	~$ modio -p192.168.2.104 -a -g5024 -t2 -r -l3 -f5
 	reg: 5024 address: 0x000313a0 value: 0.90.e8.8b.2d.5a
@@ -287,7 +287,31 @@ Examples:
 	11004 DI_counterOverflowFlag              0x000103eb 0
 	11005 DI_counterOverflowFlag              0x000103ec 0
 ```
-
+7. Read eight registers starting from modbus COIL register number 1 from modbus server with ip address 192.168.2.104
+```
+	~$ modio -p192.168.2.104 -g1 -l8 -r
+	reg: 00001 address: 0x00000000 value: 0
+	reg: 00002 address: 0x00000001 value: 0
+	reg: 00003 address: 0x00000002 value: 0
+	reg: 00004 address: 0x00000003 value: 0
+	reg: 00005 address: 0x00000004 value: 0
+	reg: 00006 address: 0x00000005 value: 0
+	reg: 00007 address: 0x00000006 value: 0
+	reg: 00008 address: 0x00000007 value: 0
+```
+8. Write eight registers at modbus server with ip address 192.168.2.104, starting from modbus COIL register number 1 with    
+   the value 1 and then read them all:
+```
+	~$ modio -p192.168.2.104 -g1 -l8 -w1 -r
+	reg: 00001 address: 0x00000000 value: 1
+	reg: 00002 address: 0x00000001 value: 1
+	reg: 00003 address: 0x00000002 value: 1
+	reg: 00004 address: 0x00000003 value: 1
+	reg: 00005 address: 0x00000004 value: 1
+	reg: 00006 address: 0x00000005 value: 1
+	reg: 00007 address: 0x00000006 value: 1
+	reg: 00008 address: 0x00000007 value: 1
+```
 
 MAINTAINERS
 -----------
