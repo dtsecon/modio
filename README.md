@@ -13,9 +13,10 @@ INTRODUCTION
 ------------
 
 **modio** is a generic tool for read and write modbus registers. **modio** stands for (**mod**)bus   
-(**i**)nput (**o**)utput. It supports modbus RTU and modbus TCP connections. Device and register   
-information can be supplied as external structured configuration files and used to format the   
-read data.  
+(**i**)nput (**o**)utput. It supports modbus RTU and modbus TCP connections. Modbus register   
+data can be presented in binary, decimal, hexadecimal and ascii format. Additional device and   
+register information can be supplied as external structured configuration files which can be   
+used to format and enrich the modbus printout data.  
  
  * For the description of modio tool visit   
    https://github.com/dtsecon/modio
@@ -76,7 +77,7 @@ INSTALLATION
     * `sudo make install` - _OPTIONAL_ install the library on this system
 
  4. **modio**. Build and install modio:
-    * `git clone https://github.com/dtsecon/modio`- download the source
+    * `git clone https://github.com/dtsecon/modio` - download the source
     * `cd modio`
     * `./autogen.sh `
     * `./configure` - default installation prefix=/usr/local
