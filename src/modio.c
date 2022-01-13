@@ -1014,6 +1014,9 @@ main(int argc, char **argv)
                             }
                             reg16p++;
                             reg++;
+                            if (pfm != HLO) {
+                                xreg++;
+                            }
                         }
                     }
                     break;
