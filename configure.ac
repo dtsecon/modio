@@ -2,11 +2,11 @@
 # modio configure.ac
 #
 
-# notice message
-AC_MSG_NOTICE([Checking depedencies for modio build])
-
 # initial information about the project
 AC_INIT([modio],[0.8])
+
+# notice message
+AC_MSG_NOTICE([Checking depedencies for modio build])
 
 # safety check in case user overwritten src dir
 AC_CONFIG_SRCDIR([src/modio.c])
@@ -67,3 +67,10 @@ AC_CONFIG_FILES([Makefile src/Makefile regs/Makefile])
 
 # gerate output
 AC_OUTPUT
+
+# goodbye message
+AC_MSG_NOTICE([])
+AC_MSG_NOTICE([-------------------------------------------------------------------])
+AC_MSG_NOTICE([Configured build system. You can now run make and sudo make install])
+AC_MSG_NOTICE([-------------------------------------------------------------------])
+AC_MSG_NOTICE([])
