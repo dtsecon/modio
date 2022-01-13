@@ -34,6 +34,16 @@
 #define MODBUS_SLAVE_ID 1
 #define REG_SIZE 64
 
+/*
+ * modbus response and byte timeouts
+ * us: 1 - 999999
+ */
+#define MODRESP_TIMEOUT_s 3
+#define MODRESP_TIMEOUT_us 0
+#define MODBYTE_TIMEOUT_s 0
+#define MODBYTE_TIMEOUT_us 500000
+
+
 /* definition of register type */
 enum regtype {
     COIL = 0,

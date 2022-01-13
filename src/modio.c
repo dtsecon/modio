@@ -1405,7 +1405,7 @@ modbus_init(char *port, serconf_t sc, int id)
     }
 
     /* set modbus response time out to 200ms */
-    rval = modbus_set_response_timeout(mb, 0, 200000);
+    rval = modbus_set_response_timeout(mb, MODRESP_TIMEOUT_s, MODRESP_TIMEOUT_us);
     if (rval < 0) {
         modbus_free(mb);
         printf("modbus_set_response_timeout: error(%s)", modbus_strerror(errno));
@@ -1413,7 +1413,7 @@ modbus_init(char *port, serconf_t sc, int id)
     }
 
     /* set modbus response time out to 200ms */
-    rval = modbus_set_byte_timeout(mb, 0, 200000);
+    rval = modbus_set_byte_timeout(mb, MODBYTE_TIMEOUT_s, MODBYTE_TIMEOUT_us);
     if (rval < 0) {
         modbus_free(mb);
         printf("modbus_set_byte_timeout: error(%s)", modbus_strerror(errno));
