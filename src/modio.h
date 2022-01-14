@@ -22,6 +22,8 @@
 #ifndef MXIO_H
 #define MXIO_H
 
+#define PROGR_DIR_NAME "modio"
+
 #ifndef REGISTER_PATH
 #define REGISTER_PATH "/usr/local/share/modio/"
 #endif

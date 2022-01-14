@@ -80,6 +80,9 @@ int init_drlist(dvlist_t **lst);
 /* read supported devices and registers' info */
 void read_dreg(dvlist_t *lst);
 
+/* read registers from device files */
+dvlist_t *read_dreg_files(dvlist_t *lst, DIR *fd, char *cf_path);
+
 /* print supported devices' info */
 void print_dev_info(dvlist_t *lst, int sz);
 
@@ -184,13 +187,6 @@ main(int argc, char **argv)
 
     /* getopt_long stores the option index here. */
     int option_index = 0;
-
-    /* initialize the device list */
-    lsz = init_drlist(&dvl);
-
-
-    /* initialize register memory area */
-    init_rrega();
 
     /* if no option specified print usage */
     if (argc == 1) {
@@ -368,6 +364,12 @@ main(int argc, char **argv)
         port = (char *)malloc((strlen(DEVICE_PATH) + 1) * sizeof(char));
         strcpy(port, DEVICE_PATH);
     }
+
+    /* initialize the device list */
+    lsz = init_drlist(&dvl);
+
+    /* initialize register memory area */
+    init_rrega();
 
     /* if device number greater than device list size exit */
     if (dnum > lsz) {
@@ -1426,24 +1428,53 @@ init_drlist(dvlist_t **lst)
     DIR* FD;
     struct dirent* in_file;
     dreg_t *drarr = NULL;
-    int cnt;
+    char *home;
+    char *user_dir;
+    int cnt = 0;
 
     /* Scanning the devices' directory */
-    if (NULL == (FD = opendir (REGISTER_PATH))) {
-        fprintf(stderr, "Error: Failed to open devices' directory\n");
-        exit(EXIT_FAILURE);
-    }
-    cnt = 0;
-    while ((in_file = readdir(FD))) {
-        /* On linux/Unix we don't want current and parent directories */
-        if (!strcmp (in_file->d_name, ".")) {
-            continue;
+    if (NULL == (FD = opendir(REGISTER_PATH))) {
+        fprintf(stderr, "Error: Failed to open devices' directory (%s)\n", REGISTER_PATH);
+    } else {
+        while ((in_file = readdir(FD))) {
+            /* On linux/Unix we don't want current and parent directories */
+            if (!strcmp (in_file->d_name, ".")) {
+                continue;
+            }
+            if (!strcmp (in_file->d_name, "..")) {
+                continue;
+            }
+            cnt++;
         }
-        if (!strcmp (in_file->d_name, "..")) {
-            continue;
-        }
-        cnt++;
     }
+    closedir(FD);
+
+    /* construct user path for config files */
+    home = (char *)malloc(strlen(getenv("HOME")));
+    strcpy(home, getenv("HOME"));
+    user_dir = (char *)malloc((strlen(home) + strlen("/.modio/" + 1)) * sizeof(char));
+    strcpy(user_dir, strcat(home, "/.modio/"));
+
+    modio_debugx(2, "user dir: %s\n", user_dir);
+
+    /* Scanning the devices' directory */
+    if (NULL == (FD = opendir(user_dir))) {
+        fprintf(stderr, "Error: Failed to open devices' directory (%s)\n", user_dir);
+    } else {
+        while ((in_file = readdir(FD))) {
+            /* On linux/Unix we don't want current and parent directories */
+            if (!strcmp (in_file->d_name, ".")) {
+                continue;
+            }
+            if (!strcmp (in_file->d_name, "..")) {
+                continue;
+            }
+            cnt++;
+        }
+    }
+    closedir(FD);
+
+    modio_debugx(2, "number of config files: %d\n", cnt);
 
     /* allocate memory for device list */
     *lst = (dvlist_t *)malloc(cnt * sizeof(dvlist_t));
@@ -1451,6 +1482,9 @@ init_drlist(dvlist_t **lst)
     /* allocate memory for device register array of size cnt */
     drarr = (dreg_t *)malloc(sizeof(dreg_t));
     (*lst)->regs = drarr;
+
+    free(user_dir);
+    free(home);
 
     return cnt;
 }
@@ -1461,25 +1495,61 @@ init_drlist(dvlist_t **lst)
 void
 read_dreg(dvlist_t *lst)
 {
-    /* configuration vars */
-    config_t cfg;
-    config_setting_t *regs;
-    const char *str;
-    char *path;
+    dvlist_t *last;
+    char *home;
+    char *user_dir;
 
     /* directory operations vars */
     DIR* FD;
-    struct dirent* in_file;
 
-    dvlist_t *dvl = lst;
+    /* construct user path for config files */
+    home = (char *)malloc(strlen(getenv("HOME")));
+    strcpy(home, getenv("HOME"));
+    user_dir = (char *)malloc((strlen(home) + strlen("./modio/")) * sizeof(char));
+    strcpy(user_dir, strcat(home, "/.modio/"));
+
+    modio_debugx(2, "user dir: %s\n", user_dir);
 
     /* Scanning the devices' directory */
-    if (NULL == (FD = opendir (REGISTER_PATH))) {
-        fprintf(stderr, "Error: Failed to open devices' directory\n");
-        exit(EXIT_FAILURE);
+    if (NULL == (FD = opendir(REGISTER_PATH))) {
+        fprintf(stderr, "Error: Failed to open devices' directory (%s)\n", REGISTER_PATH);
+    } else {
+        last = read_dreg_files(lst, FD, REGISTER_PATH);
+        closedir(FD);
     }
+
+    if (NULL == (FD = opendir(user_dir))) {
+        fprintf(stderr, "Error: Failed to open devices' directory (%s)\n", user_dir);
+    } else {
+        last = read_dreg_files(last, FD, user_dir);
+        closedir(FD);
+    }
+
+    free(user_dir);
+    free(home);
+}
+
+/*
+ * read registers from device files
+ * it returns a pointer to the last device entry in list
+ */
+dvlist_t *
+read_dreg_files(dvlist_t *lst, DIR *fd, char *cf_path)
+{
+    /* configuration vars */
+    config_t cfg;
+    const char *str;
+    char *path;
+    config_setting_t *regs;
+    dvlist_t *dvl = lst;
+    
+    /* directory operations vars */
+    struct dirent* in_file;
+
     modio_debugx(3, "DEVICES:\n");
-    while ((in_file = readdir(FD))) {
+    while ((in_file = readdir(fd))) {
+
+        modio_debugx(3, "file name: %s\n", in_file->d_name);
 
         /* On linux/Unix we don't want current and parent directories */
         if (!strcmp (in_file->d_name, ".")) {
@@ -1488,12 +1558,12 @@ read_dreg(dvlist_t *lst)
         if (!strcmp (in_file->d_name, "..")) {
             continue;
         }
-        path = (char *)malloc((strlen(REGISTER_PATH) + strlen(in_file->d_name) + 1) * sizeof(char));
+        path = (char *)malloc((strlen(cf_path) + strlen(in_file->d_name) + 1) * sizeof(char));
         if (!path) {
             fprintf(stderr, "malloc failed: insufficient memory!\n");
             exit(EXIT_FAILURE);
         }
-        strcpy(path, REGISTER_PATH);
+        strcpy(path, cf_path);
         strcat(path, in_file->d_name);
 
         config_init(&cfg);
@@ -1618,6 +1688,7 @@ read_dreg(dvlist_t *lst)
         free(path);
         dvl++;
     }
+    return dvl;
 }
 
 /* 
@@ -1754,7 +1825,7 @@ usage(char *pname)
     printf("--(l)en      <val> length of read/write count from register number or address (default 1)\n");
     printf("                   length is defined in words and word size depends on register type\n");
     printf("                   example: modio -p/dev/ttyUSB0 --baud 38400 --parity E -g18 -a -t3 -r reads 3\n");
-    printf("                   16bit registers starting from address 0x40078\n");
+    printf("                   16bit registers starting from memory address 0x40078\n");
     printf("--reg_(a)ddress    read (write) data from (to) register address \n");
     printf("--reg_(t)ype <val> register type (0:COIL 1:INPUT_BIT 2:INPUT_REG 3:HOLDING, default 0)\n");
     printf("--(f)ormat   <val> format print output (default value 2)\n");
@@ -1769,6 +1840,6 @@ usage(char *pname)
     printf("--(d)ev_info  [id] id is optional, if defined print registers' info for selected device otherwise\n");
     printf("                   print list of supported devices\n");
     printf("--r(e)ad_all  <id> read all registers' from device with <id> in the list of supported devices\n");
-    printf("--debug      <val> print debug messages\n");
+    printf("--debug      <val> print debug messages of debug level <val>\n");
     printf("--(h)elp           print usage\n");
 }
