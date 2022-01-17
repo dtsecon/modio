@@ -326,12 +326,6 @@ main(int argc, char **argv)
             case 'e':
                 rall = TRUE;
                 dnum = (int )strtoul(optarg, NULL, 0);
-
-                /* if device number greater than device list size exit */
-                if (dnum > lsz || dnum == 0) {
-                    usage(argv[0]);
-                    exit(EXIT_FAILURE);
-                }
                 break;
             case 'h':
                 usage(argv[0]);
