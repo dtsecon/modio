@@ -173,8 +173,10 @@ The register meta-data fields are specified below:
   - byte hex (BFX),
   - high low word (HLO)
 
-**modio** scans the directory `/usr/local/share/modio` for device register configuration files at run   
-time. The user can create and add more device configuration files by following the aforementioned syntax   
+**modio** scans the directories `/usr/local/share/modio` and `$HOME/.modio` for device register   
+configuration files at run time. All verified configuration files distributed with the **modio**   
+source are copied in `/usr/local/share/modio` directory. The user can also create and add more    
+device configuration files under `$HOME/.modio` directory, following the aforementioned syntax   
 rules. 
 
 
