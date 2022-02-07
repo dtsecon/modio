@@ -60,7 +60,7 @@ char *hex_to_str(int xnum);
 char *mem_to_bytes(uint16_t *array, int size, char *(*conv)(int));
 
 /* initialize read register array */
-void init_rrega();
+void init_rrega(void);
 
 /* convert an array of words with ASCII bytes into a string*/
 char *words_to_str(const uint16_t *array, int length);
@@ -612,12 +612,14 @@ main(int argc, char **argv)
                        prfmt
                 );
             }
-            modio_debugx(1, "reg: %d reg_c: %d addr: 0x%x rtype: %d len: %d pfm: %d\n", reg,
-                                                                                        reg_c,
-                                                                                        xreg,
-                                                                                        rtype,
-                                                                                        len,
-                                                                                        pfm
+            modio_debugx(1, 
+                         "reg: %d reg_c: %d addr: 0x%x rtype: %d len: %d pfm: %d\n", 
+                         reg,
+                         reg_c,
+                         xreg,
+                         rtype,
+                         len,
+                         pfm
             );
             switch (rtype) {
                 case COIL:
@@ -1252,7 +1254,7 @@ int_to_bin(uint16_t inum)
  * initialize read register array
  */
 void
-init_rrega() {
+init_rrega(void) {
 
     for(int i = 0; i < REG_SIZE; i++) {
         creg[i] = 0;
@@ -1694,19 +1696,21 @@ print_dev_info(dvlist_t *lst, int sz)
     dvlist_t *dvl = lst;
 
     printf("Supported devices:\n");
-    printf("%-3s %-12s %-12s %-15s %-4s\n", "NUM", 
-                                            "TYPE", 
-                                            "MANUFACTURER", 
-                                            "MODEL", 
-                                            "REGS"
+    printf("%-3s %-12s %-12s %-15s %-4s\n", 
+           "NUM", 
+           "TYPE",
+           "MANUFACTURER",
+           "MODEL",
+           "REGS"
     );
     int cnt = 0;
     while (cnt < sz) {
-        printf("%-3d %-12s %-12s %-15s %-4d\n", cnt + 1, 
-                                                dvl->type, 
-                                                dvl->manfc, 
-                                                dvl->model, 
-                                                dvl->nor
+        printf("%-3d %-12s %-12s %-15s %-4d\n", 
+               cnt + 1,
+               dvl->type,
+               dvl->manfc,
+               dvl->model,
+               dvl->nor
         );
         cnt++;
         dvl++;
@@ -1725,30 +1729,32 @@ print_dev_reginfo(dvlist_t *lst, int num, int nor)
     uint32_t dl = 0;                /* description length */
 
     printf("%s %s %s\n", dvl[num].manfc, dvl[num].model, dvl[num].type);
-    printf("%-5s %-12s %-35s %-90s %-3s %-10s %-7s %-12s %-3s\n", "NUM", 
-                                                                  "ADDRESS", 
-                                                                  "NAME",
-                                                                  "DESCRIPTION", 
-                                                                  "LEN", 
-                                                                  "RANGE", 
-                                                                  "SCALE", 
-                                                                  "ENGU", 
-                                                                  "ACC"
+    printf("%-5s %-12s %-35s %-90s %-3s %-10s %-7s %-12s %-3s\n", 
+           "NUM",
+           "ADDRESS",
+           "NAME",
+           "DESCRIPTION",
+           "LEN",
+           "RANGE",
+           "SCALE",
+           "ENGU",
+           "ACC"
     );
     int cnt = 0;
     while (cnt < nor) {
 
         /* if size of description less equal to max length... */
         if ((dl = strlen(regs->desc)) <= dmxl) {
-            printf("%-5d 0x%-10x %-35s %-90s %-3d %-10s %-7.2f %-12s %-3s\n", regs->num, 
-                                                                              regs->addr, 
-                                                                              regs->name,
-                                                                              regs->desc, 
-                                                                              regs->len, 
-                                                                              regs->range, 
-                                                                              regs->scale, 
-                                                                              regs->engu, 
-                                                                              regs->acc
+            printf("%-5d 0x%-10x %-35s %-90s %-3d %-10s %-7.2f %-12s %-3s\n", 
+                   regs->num,
+                   regs->addr,
+                   regs->name,
+                   regs->desc,
+                   regs->len,
+                   regs->range,
+                   regs->scale,
+                   regs->engu,
+                   regs->acc
             );
 
         /* ...else split description in two lines */
@@ -1758,15 +1764,16 @@ print_dev_reginfo(dvlist_t *lst, int num, int nor)
             strcpy(s_b, regs->desc + dmxl);
             strncpy(s_a, regs->desc, dmxl);
             strcpy(s_a + dmxl, "");
-            printf("%-5d 0x%-10x %-35s %-90s %-3d %-10s %-7.2f %-12s %-3s\n", regs->num, 
-                                                                              regs->addr, 
-                                                                              regs->name,
-                                                                              s_a, 
-                                                                              regs->len, 
-                                                                              regs->range, 
-                                                                              regs->scale, 
-                                                                              regs->engu, 
-                                                                              regs->acc
+            printf("%-5d 0x%-10x %-35s %-90s %-3d %-10s %-7.2f %-12s %-3s\n", 
+                    regs->num,
+                    regs->addr,
+                    regs->name,
+                    s_a,
+                    regs->len,
+                    regs->range,
+                    regs->scale,
+                    regs->engu,
+                    regs->acc
             );
             printf("%-5s   %-10s %-35s %-90s\n", "", "", "", s_b);
             free(s_a);
