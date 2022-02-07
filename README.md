@@ -319,7 +319,7 @@ Examples:
 MAINTAINERS
 -----------
 
- * Dimitris Oikonomou - dimitris.s.economou@gmail.com
+ * Dimitris Economou - dimitris.s.economou@gmail.com
 
 Supporting organization:
 
